@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import dns.resolver
 from datetime import tzinfo, timedelta, datetime
@@ -9,6 +9,7 @@ import threading
 import ipaddress
 from multiprocessing import Process, Queue
 import MySQLdb
+import re
 
 threads = []
 
@@ -58,12 +59,69 @@ def store_no_answer(uuid_child, uuid_parent, fqdn, r_type, reason, s_dt, q_dt, r
 
 
 
-def analyse_record(uuid_child, uuid_parent, fqdn, r_type, value, s_dt):
+def analyse_record(uuid_child, uuid_parent, fqdn, r_type, r_data, s_dt):
     if r_type == 'CNAME':
         uuid_child_child = str(uuid.uuid4())
 
         # uuid_child is now the parent, uuid_new_child is the new child under the child
-        resolve_multi_type(uuid_child_child, uuid_child, value, s_dt)
+        resolve_multi_type(uuid_child_child, uuid_child, str(r_data), s_dt)
+    elif r_type == 'MX':
+        uuid_child_child = str(uuid.uuid4())
+
+        # uuid_child is now the parent, uuid_new_child is the new child under the child
+        resolve_multi_type(uuid_child_child, uuid_child, r_data.exchange, s_dt)
+
+    elif r_type == 'TXT':
+        clean_r_data = re.sub(r'^"|"$', '', str(r_data))
+        if clean_r_data.startswith('v=spf1'):
+            # Found SPFv1 record
+            uuid_child_child = str(uuid.uuid4())
+            q_dt = datetime.utcnow()
+            r_dt = datetime.utcnow()
+
+            print("found SPF record", clean_r_data)
+
+            # Store entire SPF record. The content is a child under this.
+            store_record(uuid_child_child, uuid_child, fqdn, 'SPF', clean_r_data, s_dt, q_dt, r_dt)
+
+            print(clean_r_data.split()[-1])
+            for elem in clean_r_data.split():
+                print(elem)
+
+                # Found an A record in the SPF
+                if elem.upper() == 'A':
+                    uuid_child_child_child = str(uuid.uuid4())
+
+                    # Store found A record and recurse
+                    store_record(uuid_child_child_child, uuid_child_child, fqdn, 'A', '', s_dt, q_dt, r_dt)
+                    analyse_record(uuid_child_child_child, uuid_child_child, fqdn, 'A', '', s_dt)
+
+                    # Perhaps recurse fully... but let's not recurse enlessly yet.
+                    # resolve_multi_type(uuid_child_child, uuid_child, fqdn, s_dt)
+
+                # Found an AAAA record in the SPF
+                if elem.upper() == 'AAAA':
+                    uuid_child_child_child = str(uuid.uuid4())
+
+                    # Store found A record and recurse
+                    store_record(uuid_child_child_child, uuid_child_child, fqdn, 'AAAA', '', s_dt, q_dt, r_dt)
+                    analyse_record(uuid_child_child_child, uuid_child_child, fqdn, 'AAAA', '', s_dt)
+
+                    # Perhaps recurse fully... but let's not recurse enlessly yet.
+                    # resolve_multi_type(uuid_child_child, uuid_child, fqdn, s_dt)
+
+                if elem.startswith('include:'):
+                    uuid_child_child_child = str(uuid.uuid4())
+
+                    include_data = elem.split(':')[-1]
+
+                    # Found include, must expand this by recursing into the include directory by resolving the TXT.
+                    store_record(uuid_child_child_child, uuid_child_child, include_data, 'include', '', s_dt, q_dt, r_dt)
+                    analyse_record(uuid_child_child_child, uuid_child_child, include_data, 'FQDN', '', s_dt)
+
+                # Still needs ip4: ip6: and a: and aaaa:
+
+
 
 def resolve_r_type(uuid_child, uuid_parent, fqdn, r_type, s_dt):
     answers = None
@@ -75,9 +133,9 @@ def resolve_r_type(uuid_child, uuid_parent, fqdn, r_type, s_dt):
         resolver.lifetime = 20
         answers = resolver.query(fqdn, r_type)
         r_dt = datetime.utcnow()
-        for rdata in answers:
-            store_record(uuid_child, uuid_parent, fqdn, r_type, str(rdata), s_dt, q_dt, r_dt)
-            analyse_record(uuid_child, uuid_parent, fqdn, r_type, str(rdata), s_dt)
+        for r_data in answers:
+            store_record(uuid_child, uuid_parent, fqdn, r_type, str(r_data), s_dt, q_dt, r_dt)
+            analyse_record(uuid_child, uuid_parent, fqdn, r_type, r_data, s_dt)
 
     except dns.resolver.NXDOMAIN:
         r_dt = datetime.utcnow()
