@@ -15,7 +15,7 @@ threads = []
 
 from pygraphviz import *
 
-A = AGraph(overlap=False)
+A = AGraph(overlap=False,rankdir="LR")
 
 
 def open_db():
@@ -55,7 +55,6 @@ def read_record_uuid_parent(uuid_parent):
             read_record_uuid_parent(uuid)
 
 
-
     except Exception as inst:
         print("read_record_uuid:", "Unknown type of error is:", type(inst), inst, file=sys.stderr)
 
@@ -84,6 +83,7 @@ main_child(uuid_main)
 #p = Process(target=main_child, args=(uuid_main, base_fqdn, s_dt))
 #p.start()
 
-A.draw("domainhunter.png",prog='neato')
+A.draw("domainhunter.png",prog='dot')
+#A.draw("domainhunter.dot",prog='dot')
 
 

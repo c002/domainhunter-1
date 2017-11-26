@@ -61,15 +61,12 @@ def store_no_answer(uuid_child, uuid_parent, fqdn, r_type, reason, s_dt, q_dt, r
 
 def analyse_record(uuid_child, uuid_parent, fqdn, r_type, r_data, s_dt):
     if r_type == 'CNAME':
-        uuid_child_child = str(uuid.uuid4())
+        d = str(r_data)[:-1]
+        resolve_multi_type(uuid_child, d, s_dt)
 
-        # uuid_child is now the parent, uuid_new_child is the new child under the child
-        resolve_multi_type(uuid_child_child, uuid_child, str(r_data), s_dt)
     elif r_type == 'MX':
-        uuid_child_child = str(uuid.uuid4())
-
-        # uuid_child is now the parent, uuid_new_child is the new child under the child
-        resolve_multi_type(uuid_child_child, uuid_child, r_data.exchange, s_dt)
+        # Recurse
+        resolve_multi_type(uuid_child, r_data.exchange, s_dt)
 
     elif r_type == 'TXT':
         clean_r_data = re.sub(r'^"|"$', '', str(r_data))
@@ -119,6 +116,7 @@ def analyse_record(uuid_child, uuid_parent, fqdn, r_type, r_data, s_dt):
                     store_record(uuid_child_child_child, uuid_child_child, include_data, 'include', '', s_dt, q_dt, r_dt)
                     analyse_record(uuid_child_child_child, uuid_child_child, include_data, 'FQDN', '', s_dt)
 
+                    resolve_multi_type(uuid_child, include_data, s_dt)
                 # Still needs ip4: ip6: and a: and aaaa:
 
 
