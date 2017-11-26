@@ -48,11 +48,16 @@ def read_record_uuid_parent(uuid_parent):
         for (auto_id, uuid, uuid_parent, fqdn, r_type, value) in db_o['cursor']:
             print(auto_id, uuid, uuid_parent, fqdn, r_type, value, file=sys.stderr)
 
-            A.add_node(uuid, color='red', label="FQDN: " + fqdn + "\n" + r_type + "\n" + value)
-            A.add_edge(uuid_parent, uuid)
 
-            # Recurse
-            read_record_uuid_parent(uuid)
+            if uuid == uuid_parent:
+                A.add_node(uuid_main, color='blue', label="Main search domain is:\n" + fqdn)
+                continue
+            else:
+                A.add_node(uuid, color='red', label="FQDN: " + fqdn + "\n" + r_type + "\n" + value)
+                A.add_edge(uuid_parent, uuid)
+
+                # Recurse
+                read_record_uuid_parent(uuid)
 
 
     except Exception as inst:

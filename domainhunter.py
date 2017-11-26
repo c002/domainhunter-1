@@ -237,10 +237,14 @@ if len(sys.argv) != 2:
 
 base_fqdn = sys.argv[1]
 
-uuid_main = str(uuid.uuid4())
-s_dt = datetime.utcnow()
 maxconnections = 10
 pool_sema = threading.BoundedSemaphore(value=maxconnections)
+
+uuid_main = str(uuid.uuid4())
+s_dt = datetime.utcnow()
+
+# Hack: the base_fqdn is its own parent
+store_record(uuid_main, uuid_main, base_fqdn, '', '', s_dt, s_dt, s_dt)
 
 print(str(uuid_main), "for a search on base FQDN", base_fqdn, "started at", str(s_dt), file=sys.stdout)
 p = Process(target=main_child, args=(uuid_main, base_fqdn, s_dt))
