@@ -79,14 +79,14 @@ def analyse_record(uuid_child, uuid_parent, fqdn, r_type, r_data, s_dt):
             q_dt = datetime.utcnow()
             r_dt = datetime.utcnow()
 
-            print("found SPF record", clean_r_data)
+            print("found SPF record", clean_r_data, file=sys.stderr)
 
             # Store entire SPF record. The content is a child under this.
             store_record(uuid_child_child, uuid_child, fqdn, 'SPF', clean_r_data, s_dt, q_dt, r_dt)
 
-            print(clean_r_data.split()[-1])
+            print(clean_r_data.split()[-1], file=sys.stderr)
             for elem in clean_r_data.split():
-                print(elem)
+                print(elem, file=sys.stderr)
 
                 # Found an A record in the SPF
                 if elem.upper() == 'A':
@@ -164,17 +164,16 @@ def close_db(db_o):
     db_o['cursor'].close()
     db_o['connection'].close()
 
-def resolve_multi_type(uuid_child, uuid_parent, fqdn, s_dt):
+def resolve_multi_type(uuid_parent, fqdn, s_dt):
     # types = ['A', 'AAAA', 'CAA', 'RRSIG', 'CNAME', 'MX', 'TXT', 'PTR', 'NS', 'NAPTR', 'SOA', 'SRV', 'SSHFP', 'TLSA', 'ANY']
     types = ['A', 'AAAA', 'CAA', 'RRSIG', 'CNAME', 'MX', 'TXT', 'PTR', 'NS', 'NAPTR', 'SOA', 'SRV', 'SSHFP']
     for i in types:
+        uuid_child = str(uuid.uuid4())
         resolve_r_type(uuid_child, uuid_parent, fqdn, i, s_dt)
 
 def resolve_multi_sub_domains_per_thread(uuid_parent, fqdn, s_dt):
-    uuid_child = str(uuid.uuid4())
-
     try:
-        t = threading.Thread(target=resolve_multi_type, args=(uuid_child, uuid_parent, fqdn, s_dt,))
+        t = threading.Thread(target=resolve_multi_type, args=(uuid_parent, fqdn, s_dt,))
         threads.append(t)
         t.start()
     except:
