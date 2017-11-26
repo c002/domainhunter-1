@@ -10,6 +10,10 @@ import ipaddress
 from multiprocessing import Process, Queue
 import MySQLdb
 import re
+import os
+
+if not 'PATH' in os.environ:
+    os.environ["PATH"] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
 threads = []
 

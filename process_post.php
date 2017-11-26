@@ -43,7 +43,7 @@
             } else {
                 if (! file_exists("/tmp/" . $uuid)) {
                     touch("/tmp/" . $uuid);
-                    $cmd = "/var/www/node.koeroo.net/pretty_print_domainhunter.py " . $uuid . " " . "/var/www/node.koeroo.net/temp/" . $uuid . ".png" . " 2>/dev/null";
+                    $cmd = "/var/www/node.koeroo.net/pretty_print_domainhunter.py " . $uuid . " " . "/var/www/node.koeroo.net/temp/" . $uuid . ".png" . " 2>>/var/www/node.koeroo.net/temp/".$uuid.".log" . " >> /var/www/node.koeroo.net/temp/".$uuid.".log";
                     system($cmd);
                 }
                 header("refresh:2;url=process_post.php?uuid=" . $uuid);
