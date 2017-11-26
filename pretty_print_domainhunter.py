@@ -72,11 +72,13 @@ def main_child(uuid_main):
 
 
 ### MAIN ###
-if len(sys.argv) != 2:
-    print("Please provide one UUID")
+if len(sys.argv) != 3:
+    print("Please provide one UUID and an output file")
     sys.exit(1)
 
 uuid_main = sys.argv[1]
+filename = sys.argv[2]
+
 
 maxconnections = 10
 pool_sema = threading.BoundedSemaphore(value=maxconnections)
@@ -88,7 +90,7 @@ main_child(uuid_main)
 #p = Process(target=main_child, args=(uuid_main, base_fqdn, s_dt))
 #p.start()
 
-A.draw("domainhunter.png",prog='dot')
+A.draw(filename, prog='dot')
 #A.draw("domainhunter.dot",prog='dot')
 
 
