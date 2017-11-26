@@ -37,25 +37,32 @@
             $uuid = $_GET['uuid'];
             print $uuid;
 
-            if (file_exists("/var/www/node.koeroo.net/temp/" . $uuid . ".png")) {
+            $extention = ".svg";
+
+            if (file_exists("/var/www/node.koeroo.net/temp/" . $uuid . $extention)) {
                 /* Redirect to end result */
                 $html = '<html><body>' . "\n" .
                         '<button onclick="window.location.href=\'/index.html\'">Return</button>'."\n" .
                         '<br>'."\n" .
                         '<style>'.
-                        '.fit { max-width: 200%; max-height: 200%; }'.
+                        '.fit { width: 400%; }'.
                         '</style>'.
-                        '<img class="fit" src="/temp/' . $uuid . '.png">'. "\n" .
+                        '<embed src="/temp/' . $uuid . $extention . '" type="image/svg+xml"></embed>' .
                         '</body></html>'."\n";
+
+                        /* '<img class="fit" src="/temp/' . $uuid . $extention . ">'. "\n" . */
                 file_put_contents("/var/www/node.koeroo.net/temp/" . $uuid . ".html", $html);
 
-                /* header("refresh:1;url=temp/" . $uuid . ".png"); */
+                /* header("refresh:1;url=temp/" . $uuid . $extention); */
                 header("refresh:1;url=temp/" . $uuid . ".html");
                 unlink("/tmp/" . $uuid);
             } else {
                 if (! file_exists("/tmp/" . $uuid)) {
                     touch("/tmp/" . $uuid);
-                    $cmd = "/var/www/node.koeroo.net/pretty_print_domainhunter.py " . $uuid . " " . "/var/www/node.koeroo.net/temp/" . $uuid . ".png" . " 2>>/var/www/node.koeroo.net/temp/".$uuid.".log" . " >> /var/www/node.koeroo.net/temp/".$uuid.".log";
+                    $cmd = "/var/www/node.koeroo.net/pretty_print_domainhunter.py " . $uuid . " " .
+                           "/var/www/node.koeroo.net/temp/" . $uuid . $extention .
+                           " 2>>/var/www/node.koeroo.net/temp/".$uuid.".log" .
+                           " >> /var/www/node.koeroo.net/temp/".$uuid.".log";
                     system($cmd);
                 }
                 header("refresh:2;url=process_post.php?uuid=" . $uuid);
