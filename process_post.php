@@ -38,7 +38,19 @@
             print $uuid;
 
             if (file_exists("/var/www/node.koeroo.net/temp/" . $uuid . ".png")) {
-                header("refresh:1;url=temp/" . $uuid . ".png");
+                /* Redirect to end result */
+                $html = '<html><body>' . "\n" .
+                        '<button onclick="window.location.href=\'/index.html\'">Return</button>'."\n" .
+                        '<br>'."\n" .
+                        '<style>'.
+                        '.fit { max-width: 200%; max-height: 200%; }'.
+                        '</style>'.
+                        '<img class="fit" src="/temp/' . $uuid . '.png">'. "\n" .
+                        '</body></html>'."\n";
+                file_put_contents("/var/www/node.koeroo.net/temp/" . $uuid . ".html", $html);
+
+                /* header("refresh:1;url=temp/" . $uuid . ".png"); */
+                header("refresh:1;url=temp/" . $uuid . ".html");
                 unlink("/tmp/" . $uuid);
             } else {
                 if (! file_exists("/tmp/" . $uuid)) {
