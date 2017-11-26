@@ -72,14 +72,13 @@ def analyse_record(uuid_child, uuid_parent, fqdn, r_type, r_data, s_dt):
         clean_r_data = re.sub(r'^"|"$', '', str(r_data))
         if clean_r_data.startswith('v=spf1'):
             # Found SPFv1 record
-            uuid_child_child = str(uuid.uuid4())
             q_dt = datetime.utcnow()
             r_dt = datetime.utcnow()
 
             print("found SPF record", clean_r_data, file=sys.stderr)
 
             # Store entire SPF record. The content is a child under this.
-            store_record(uuid_child_child, uuid_child, fqdn, 'SPF', clean_r_data, s_dt, q_dt, r_dt)
+            #store_record(uuid_child_child, uuid_child, fqdn, 'SPF', clean_r_data, s_dt, q_dt, r_dt)
 
             print(clean_r_data.split()[-1], file=sys.stderr)
             for elem in clean_r_data.split():
@@ -87,36 +86,42 @@ def analyse_record(uuid_child, uuid_parent, fqdn, r_type, r_data, s_dt):
 
                 # Found an A record in the SPF
                 if elem.upper() == 'A':
-                    uuid_child_child_child = str(uuid.uuid4())
+                    uuid_child_child = str(uuid.uuid4())
 
                     # Store found A record and recurse
-                    store_record(uuid_child_child_child, uuid_child_child, fqdn, 'A', '', s_dt, q_dt, r_dt)
-                    analyse_record(uuid_child_child_child, uuid_child_child, fqdn, 'A', '', s_dt)
+                    store_record(uuid_child_child, uuid_child, fqdn, 'A', '', s_dt, q_dt, r_dt)
+                    analyse_record(uuid_child_child, uuid_child, fqdn, 'A', '', s_dt)
 
                     # Perhaps recurse fully... but let's not recurse enlessly yet.
                     # resolve_multi_type(uuid_child_child, uuid_child, fqdn, s_dt)
+
+                    # Let's recurse only the A record.
+                    resolve_r_type(uuid_child_child, uuid_child, fqdn, 'A', s_dt)
 
                 # Found an AAAA record in the SPF
                 if elem.upper() == 'AAAA':
-                    uuid_child_child_child = str(uuid.uuid4())
+                    uuid_child_child = str(uuid.uuid4())
 
                     # Store found A record and recurse
-                    store_record(uuid_child_child_child, uuid_child_child, fqdn, 'AAAA', '', s_dt, q_dt, r_dt)
-                    analyse_record(uuid_child_child_child, uuid_child_child, fqdn, 'AAAA', '', s_dt)
+                    store_record(uuid_child_child, uuid_child, fqdn, 'AAAA', '', s_dt, q_dt, r_dt)
+                    analyse_record(uuid_child_child, uuid_child, fqdn, 'AAAA', '', s_dt)
 
                     # Perhaps recurse fully... but let's not recurse enlessly yet.
                     # resolve_multi_type(uuid_child_child, uuid_child, fqdn, s_dt)
 
+                    # Let's recurse only the A record.
+                    resolve_r_type(uuid_child_child, uuid_child, fqdn, 'AAAA', s_dt)
+
                 if elem.startswith('include:'):
-                    uuid_child_child_child = str(uuid.uuid4())
+                    uuid_child_child = str(uuid.uuid4())
 
                     include_data = elem.split(':')[-1]
 
                     # Found include, must expand this by recursing into the include directory by resolving the TXT.
-                    store_record(uuid_child_child_child, uuid_child_child, include_data, 'include', '', s_dt, q_dt, r_dt)
-                    analyse_record(uuid_child_child_child, uuid_child_child, include_data, 'FQDN', '', s_dt)
+                    store_record(uuid_child_child, uuid_child, include_data, 'INCLUDE', '', s_dt, q_dt, r_dt)
+                    analyse_record(uuid_child_child, uuid_child, include_data, 'INCLUDE', '', s_dt)
 
-                    resolve_multi_type(uuid_child, include_data, s_dt)
+                    resolve_multi_type(uuid_child_child, include_data, s_dt)
                 # Still needs ip4: ip6: and a: and aaaa:
 
 
