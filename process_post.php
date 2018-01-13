@@ -1,4 +1,10 @@
 <?php
+    $DOMAINHUNTER_PY="/var/www/domainhunter/domainhunter.py";
+    $PRETTY_PRINT_PY="/var/www/domainhunter/pretty_print_domainhunter.py";
+    $DOMAIN_TEMPDIR="/var/www/domainhunter/temp/";
+    $PROCESS_POST_PHP="process_post.php";
+
+
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         /* Start processing */
         $domain = trim($_POST["domain"]);
@@ -15,7 +21,7 @@
 
         /* Input is clean, start processing */
         print ("Start processing...");
-        $cmd = "/var/www/node.koeroo.net/domainhunter.py " . $domain . " 2>/dev/null";
+        $cmd = $DOMAINHUNTER_PY . " " . $domain . " 2>/dev/null";
         print ("Going for: ");
         print ($cmd);
         $output = system($cmd);
@@ -25,7 +31,7 @@
 
 
 
-        header("refresh:2;url=process_post.php?uuid=" . $uuid);
+        header("refresh:2;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid);
 
         return;
     }
@@ -39,7 +45,7 @@
 
             $extention = ".svg";
 
-            if (file_exists("/var/www/node.koeroo.net/temp/" . $uuid . $extention)) {
+            if (file_exists($DOMAIN_TEMPDIR . $uuid . $extention)) {
                 /* Redirect to end result */
                 $html = '<html><body>' . "\n" .
                         '<button onclick="window.location.href=\'/index.html\'">Return</button>'."\n" .
@@ -51,7 +57,7 @@
                         '</body></html>'."\n";
 
                         /* '<img class="fit" src="/temp/' . $uuid . $extention . ">'. "\n" . */
-                file_put_contents("/var/www/node.koeroo.net/temp/" . $uuid . ".html", $html);
+                file_put_contents($DOMAIN_TEMPDIR . $uuid . ".html", $html);
 
                 /* header("refresh:1;url=temp/" . $uuid . $extention); */
                 header("refresh:1;url=temp/" . $uuid . ".html");
@@ -59,13 +65,13 @@
             } else {
                 if (! file_exists("/tmp/" . $uuid)) {
                     touch("/tmp/" . $uuid);
-                    $cmd = "/var/www/node.koeroo.net/pretty_print_domainhunter.py " . $uuid . " " .
-                           "/var/www/node.koeroo.net/temp/" . $uuid . $extention .
-                           " 2>>/var/www/node.koeroo.net/temp/".$uuid.".log" .
-                           " >> /var/www/node.koeroo.net/temp/".$uuid.".log";
+                    $cmd = $PRETTY_PRINT_PY . " " . $uuid . " " .
+                           $DOMAIN_TEMPDIR . $uuid . $extention .
+                           " 2>>".$DOMAIN_TEMPDIR.$uuid.".log" .
+                           " >> ".$DOMAIN_TEMPDIR.$uuid.".log";
                     system($cmd);
                 }
-                header("refresh:2;url=process_post.php?uuid=" . $uuid);
+                header("refresh:2;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid);
             }
             return;
         }
