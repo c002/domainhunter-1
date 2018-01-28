@@ -1,7 +1,9 @@
 <?php
-    $DOMAINHUNTER_PY="/var/www/domainhunter/domainhunter.py";
-    $PRETTY_PRINT_PY="/var/www/domainhunter/pretty_print_domainhunter.py";
-    $DOMAIN_TEMPDIR="/var/www/domainhunter/temp/";
+    $TOPDIR="/var/www/domainhunter.koeroo.net";
+
+    $DOMAINHUNTER_PY=$TOPDIR."/"."domainhunter.py";
+    $PRETTY_PRINT_PY=$TOPDIR."/"."pretty_print_domainhunter.py";
+    $DOMAIN_TEMPDIR=$TOPDIR."/"."temp/";
     $PROCESS_POST_PHP="process_post.php";
 
 

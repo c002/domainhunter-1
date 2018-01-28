@@ -9,7 +9,14 @@ import threading
 import ipaddress
 from multiprocessing import Process, Queue
 import MySQLdb
+import warnings
+from ipwhois.net import Net
+from ipwhois.asn import IPASN
+from pprint import pprint
 import re
+
+warnings.filterwarnings('ignore')
+
 
 threads = []
 
@@ -123,6 +130,45 @@ def analyse_record(uuid_child, uuid_parent, fqdn, r_type, r_data, s_dt):
 
                     resolve_multi_type(uuid_child_child, include_data, s_dt)
                 # Still needs ip4: ip6: and a: and aaaa:
+    elif r_type == 'A' or r_type == 'AAAA':
+        uuid_child_child = str(uuid.uuid4())
+        analyse_asn(uuid_child_child, uuid_child, r_data, s_dt)
+
+def analyse_asn(uuid_child, uuid_parent, ip, s_dt):
+    net = Net(ip)
+    obj = IPASN(net)
+    results = obj.lookup()
+
+    s = str(results)
+    s = s.replace('\',', '\n')
+    s = s.replace('{', '')
+    s = s.replace('}', '')
+    s = s.replace('\'', '')
+
+    q_dt = datetime.utcnow()
+    r_dt = datetime.utcnow()
+    store_record(uuid_child, uuid_parent, ip, 'ASN', s, s_dt, q_dt, r_dt)
+    # {'asn_description': 'NIKHEF FOM-Nikhef, NL', 'asn_cidr': '192.16.199.0/24', 'asn_registry': 'ripencc', 'asn': '1104', 'asn_country_code': 'NL', 'asn_date': '1986-11-07'}
+
+
+#    elif r_type == 'A':
+#        # Assume A record is already stored, only analyse deeper.
+#        print("analyse A", str(r_data), file=sys.stderr)
+#
+#        try:
+#            # Search Shodan
+#            results = api.search(str(r_data))
+#
+#            # Show the results
+#            print('Results found: %s' % results['total'], file=sys.stderr)
+#            for result in results['matches']:
+#                print('IP: %s' % result['ip_str'], file=sys.stderr)
+#                print(result['data'], file=sys.stderr)
+#                print('', file=sys.stderr)
+#        except shodan.APIError as e:
+#            print('Error: %s' % e, file=sys.stderr)
+#
+#        #store_record(uuid_child, uuid_parent, fqdn, r_type, str(r_data), s_dt, q_dt, r_dt)
 
 
 
