@@ -11,11 +11,13 @@ from multiprocessing import Process, Queue
 import MySQLdb
 import re
 import os
+import hashlib
 
 if not 'PATH' in os.environ:
     os.environ["PATH"] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin';
 
 threads = []
+asn_list = {}
 
 from pygraphviz import *
 
@@ -56,13 +58,30 @@ def read_record_uuid_parent(uuid_parent):
             if uuid == uuid_parent:
                 A.add_node(uuid_main, color='blue', label="Main search domain is:\n" + fqdn)
                 continue
+            elif r_type == 'ASN':
+
+                # Check if the value, used as the key in the dict, if it exists.
+                # If it does, use the value, in this case the uuid as result
+                h = hashlib.sha256(value.encode('utf-8')).hexdigest()
+                if not h in asn_list:
+                    # ASN details not plotted yet, plot it and record it to be plotted
+                    A.add_node(uuid, color='green', label=r_type + "\n" + value)
+                    A.add_edge(uuid_parent, uuid)
+                    asn_list[h] = uuid
+                    print("New ASN to list", uuid, file=sys.stderr)
+                else:
+                    # Connect to another existing ASN blob
+                    A.add_edge(uuid_parent, asn_list[h])
+                    print("Fetch existing ASN", asn_list[h], file=sys.stderr)
+
+                # Recurse
+                read_record_uuid_parent(uuid)
             else:
                 A.add_node(uuid, color='red', label="FQDN: " + fqdn + "\n" + r_type + "\n" + value)
                 A.add_edge(uuid_parent, uuid)
 
                 # Recurse
                 read_record_uuid_parent(uuid)
-
 
     except Exception as inst:
         print("read_record_uuid:", "Unknown type of error is:", type(inst), inst, file=sys.stderr)

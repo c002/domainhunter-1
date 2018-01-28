@@ -20,7 +20,6 @@ warnings.filterwarnings('ignore')
 
 threads = []
 
-
 def store_record(uuid_child, uuid_parent, fqdn, r_type, value, s_dt, q_dt, r_dt):
     pool_sema.acquire()
     db_o = open_db()
