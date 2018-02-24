@@ -50,7 +50,7 @@
             if (file_exists($DOMAIN_TEMPDIR . $uuid . $extention)) {
                 /* Redirect to end result */
                 $html = '<html><body>' . "\n" .
-                        '<button onclick="window.location.href=\'/index.html\'">Return</button>'."\n" .
+                        '<button onclick="window.location.href=\'/index.php\'">Return</button>'."\n" .
                         '<br>'."\n" .
                         '<style>'.
                         '.fit { width: 400%; }'.

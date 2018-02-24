@@ -63,6 +63,25 @@ def store_no_answer(uuid_child, uuid_parent, fqdn, r_type, reason, s_dt, q_dt, r
     close_db(db_o)
     pool_sema.release()
 
+def store_main_domain(uuid, fqdn, s_dt):
+    pool_sema.acquire()
+    db_o = open_db()
+
+    print("store_main_domain", uuid, fqdn, file=sys.stderr)
+    try:
+
+        db_o['cursor'].execute("INSERT INTO " +
+                               "    domainhunts (uuid, fqdn, s_dt) " +
+                               "         VALUES (  %s,   %s,   %s)",
+                                                (uuid,
+                                                       fqdn,
+                                                             s_dt.strftime('%Y-%m-%d %H:%M:%S')))
+        db_o['connection'].commit()
+    except Exception as inst:
+        print("store_main_domain:", "Unknown type of error is:", type(inst), inst, file=sys.stderr)
+
+    close_db(db_o)
+    pool_sema.release()
 
 
 def analyse_record(uuid_child, uuid_parent, fqdn, r_type, r_data, s_dt):
@@ -319,6 +338,9 @@ pool_sema = threading.BoundedSemaphore(value=maxconnections)
 
 uuid_main = str(uuid.uuid4())
 s_dt = datetime.utcnow()
+
+# Generic storage of this try.
+store_main_domain(uuid_main, base_fqdn, s_dt)
 
 # Hack: the base_fqdn is its own parent
 store_record(uuid_main, uuid_main, base_fqdn, '', '', s_dt, s_dt, s_dt)
