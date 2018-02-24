@@ -6,7 +6,7 @@ require_once 'globals.php';
 echo '<html>';
 echo '   <body>';
 echo '      <form action = "/process_post.php" method = "POST">';
-echo '         Domain: <input type = "text" name = "domain"> <br>';
+echo '         Domain: <input type="text" name="domain" autocomplete="off"> <br>';
 echo '         <input type = "submit" value = "Submit">';
 echo '      </form>';
 
@@ -20,8 +20,9 @@ if (!initialize()) {
 
 $db = $GLOBALS['db'];
 $products = array();
-$sql = 'SELECT fqdn, uuid, s_dt '.
-       '  FROM domainhunts ';
+$sql = '   SELECT fqdn, uuid, s_dt '.
+       '     FROM domainhunts '.
+       ' ORDER BY s_dt';
 $sth = $db->handle->prepare($sql);
 if (! $sth->execute()) {
     return NULL;
@@ -34,8 +35,7 @@ foreach($rs as $row) {
     echo '<tr>';
 
     echo '<td>' . $row['fqdn'] . '</td>';
-    echo '<td>' . '<a href="/temp/'.$row['uuid'].'.html">'.$row['uuid'].'</a>' . '</td>';
-    echo '<td>' . $row['s_dt'] . '</td>';
+    echo '<td>' . '<a href="/temp/'.$row['uuid'].'.html">' . $row['s_dt'] . '</a>' . '</td>';
 
     echo '</tr>';
 }
