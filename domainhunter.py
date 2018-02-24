@@ -266,6 +266,21 @@ def resolve_multi_sub_domains(uuid_main, base_fqdn, s_dt):
     resolve_multi_sub_domains_per_thread(uuid_main, 'test'+'.'+base_fqdn, s_dt)
     resolve_multi_sub_domains_per_thread(uuid_main, 'testing'+'.'+base_fqdn, s_dt)
     resolve_multi_sub_domains_per_thread(uuid_main, 'acc'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'git'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'gitlab'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'github'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'atlassian'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'jira'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'bitbucket'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'hipchat'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'confluence'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'elastic'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'kibana'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'db'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'es'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'mongo'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'key'+'.'+base_fqdn, s_dt)
+    resolve_multi_sub_domains_per_thread(uuid_main, 'keys'+'.'+base_fqdn, s_dt)
 
     # Rejoin threads before program ends
     for t in threads:

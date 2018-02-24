@@ -51,6 +51,7 @@ def read_record_uuid_parent(uuid_parent):
         print("read_record_uuid:", "Unknown type of error is:", type(inst), inst, file=sys.stderr)
 
     try:
+        # Create a new subgraph, make rank is same => A.add_subgraph(sameNodeHeight, rank="same")
         for (auto_id, uuid, uuid_parent, fqdn, r_type, value) in db_o['cursor']:
             print(auto_id, uuid, uuid_parent, fqdn, r_type, value, file=sys.stderr)
 
