@@ -4,6 +4,15 @@ GRANT ALL PRIVILEGES ON * . * TO 'domainhunter'@'localhost';
 FLUSH PRIVILEGES;
 
 USE domainhunter;
+CREATE TABLE domainhunts (
+    auto_id INTEGER NOT NULL AUTO_INCREMENT,
+    fqdn VARCHAR(2048) NOT NULL,
+    uuid VARCHAR(37) NOT NULL,
+    s_dt DATETIME,
+    PRIMARY KEY (auto_id)
+    );
+
+
 CREATE TABLE dns_records (
     auto_id INTEGER NOT NULL AUTO_INCREMENT,
     uuid VARCHAR(37) NOT NULL,
