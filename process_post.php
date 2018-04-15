@@ -19,10 +19,11 @@
             return;
         }
 
-        print ($domain);
 
         /* Input is clean, start processing */
-        print ("Start processing...");
+        print ("Start processing... ");
+        print ($domain);
+        print ("<br>");
         $cmd = $DOMAINHUNTER_PY . " " . $domain . " 2>/dev/null";
         print ("Going for: ");
         print ($cmd);
