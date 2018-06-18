@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore')
 q = JoinableQueue()
 
 
-PATH = "/var/www/domainhunter2.koeroo.net/"
+PATH = "/var/www/domainhunter.koeroo.net/"
 
 
 def open_db():

@@ -1,5 +1,5 @@
 <?php
-    $TOPDIR="/var/www/domainhunter2.koeroo.net";
+    $TOPDIR="/var/www/domainhunter.koeroo.net";
 
     $DOMAINHUNTER_PY=$TOPDIR."/"."domainhunter2.py";
     $PRETTY_PRINT_PY=$TOPDIR."/"."pretty_print_domainhunter.py";

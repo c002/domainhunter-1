@@ -22,7 +22,7 @@ asn_list = {}
 
 from pygraphviz import *
 
-PATH = '/var/www/domainhunter2.koeroo.net/db/'
+PATH = '/var/www/domainhunter.koeroo.net/db/'
 
 def open_db():
     db_o = {}
