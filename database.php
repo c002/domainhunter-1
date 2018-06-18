@@ -2,10 +2,12 @@
 function db_connect() {
     try {
         $db = new Database;
-        $db->handle = new PDO($db->dsn, $db->user, $db->pass);
+        $db->handle = new PDO($db->dsn) or die ("cannot open the database");
+/*
         if ($db->debug) {
             $db->handle->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         }
+*/
     } catch (Exception $e) {
         return NULL;
     }

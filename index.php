@@ -17,25 +17,24 @@ if (!initialize()) {
     return;
 }
 
-
-$db = $GLOBALS['db'];
-$products = array();
-$sql = '   SELECT fqdn, uuid, s_dt '.
-       '     FROM domainhunts '.
-       ' ORDER BY s_dt';
-$sth = $db->handle->prepare($sql);
-if (! $sth->execute()) {
-    return NULL;
+$db = db_connect();
+if ($db == NULL) {
+    echo 'DB connection problem';
+    return;
 }
 
-$rs = db_cast_query_results($sth);
+$products = array();
+$sql = '   SELECT fqdn, uuid_hunt, s_dt '.
+       '     FROM domainhunts'.
+       ' ORDER BY s_dt';
+$rs = $db->handle->query($sql);
 
 echo '<table border=1>';
 foreach($rs as $row) {
     echo '<tr>';
 
     echo '<td>' . $row['fqdn'] . '</td>';
-    echo '<td>' . '<a href="/temp/'.$row['uuid'].'.html">' . $row['s_dt'] . '</a>' . '</td>';
+    echo '<td>' . '<a href="/temp/'.$row['uuid_hunt'].'.html">' . $row['s_dt'] . '</a>' . '</td>';
 
     echo '</tr>';
 }

@@ -1,7 +1,7 @@
 <?php
-    $TOPDIR="/var/www/domainhunter.koeroo.net";
+    $TOPDIR="/var/www/domainhunter2.koeroo.net";
 
-    $DOMAINHUNTER_PY=$TOPDIR."/"."domainhunter.py";
+    $DOMAINHUNTER_PY=$TOPDIR."/"."domainhunter2.py";
     $PRETTY_PRINT_PY=$TOPDIR."/"."pretty_print_domainhunter.py";
     $DOMAIN_TEMPDIR=$TOPDIR."/"."temp/";
     $PROCESS_POST_PHP="process_post.php";
@@ -24,17 +24,21 @@
         print ("Start processing... ");
         print ($domain);
         print ("<br>");
-        $cmd = $DOMAINHUNTER_PY . " " . $domain . " 2>/dev/null";
+        /* $cmd = $DOMAINHUNTER_PY . " " . $domain . " 2>/dev/null"; */
+        $cmd = $DOMAINHUNTER_PY . " " . $domain . " 2>/tmp/".$domain;
         print ("Going for: ");
+        print ("<br>");
         print ($cmd);
+        print ("<br>");
         $output = system($cmd);
         print($output);
+        print ("<br>");
         $myArray = explode(' ', $output);
         $uuid = $myArray[0];
+        print ('<br>'.'the UUID for pretty printing '.$uuid);
 
 
-
-        header("refresh:2;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid);
+        header("refresh:6;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid);
 
         return;
     }
@@ -72,6 +76,7 @@
                            $DOMAIN_TEMPDIR . $uuid . $extention .
                            " 2>>".$DOMAIN_TEMPDIR.$uuid.".log" .
                            " >> ".$DOMAIN_TEMPDIR.$uuid.".log";
+                    print($cmd);
                     system($cmd);
                 }
                 header("refresh:2;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid);
