@@ -14,8 +14,10 @@ from ipwhois.net import Net
 from ipwhois.asn import IPASN
 from pprint import pprint
 import re
-
 import sqlite3
+from urllib.request import urlopen
+import json
+
 
 warnings.filterwarnings('ignore')
 
@@ -416,6 +418,16 @@ def worker():
         resolve_multi_type(uuid_parent, fqdn, s_dt)
         q.task_done()
 
+def add_ct_fqdn(uuid_hunt, base_fqdn, s_dt):
+    html = urlopen("https://certspotter.com/api/v0/certs?expired=false&duplicate=false&domain=" + base_fqdn)
+    s = html.read()
+    res = json.loads(s.decode('utf8'))
+
+    for ct_cert in res:
+        for fqdn in ct_cert['dns_names']:
+            print("Found with Certificate Transparency", fqdn, file=sys.stderr)
+            q.put((uuid_hunt, fqdn, s_dt))
+
 
 def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
 
@@ -429,6 +441,10 @@ def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
     # Put on the queue
     q.put((uuid_hunt, base_fqdn, s_dt))
 
+    # Use certificate transparency
+    add_ct_fqdn(uuid_hunt, base_fqdn, s_dt)
+
+    # Add static list
     temp = open(PATH + 'research.list','r').read().splitlines()
     for prefix in temp:
         q.put((uuid_hunt, prefix + '.' + base_fqdn, s_dt))
