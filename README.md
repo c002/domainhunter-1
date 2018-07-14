@@ -3,7 +3,8 @@ This web-tool will use a list of domains and extract as much as possible from th
 
 
 ** Dependencies
-1 python3
-1 python3-dnspython
-2 python3-mysqldb
-3 python3-pygraphviz
+1. python3
+2. python3-dnspython
+3. python3-pygraphviz
+4. pip3
+5. pip3 install --upgrade ipwhois

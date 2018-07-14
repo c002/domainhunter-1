@@ -5,10 +5,10 @@ from datetime import tzinfo, timedelta, datetime
 import time
 import uuid
 import sys
+import os
 import threading
 import ipaddress
 from multiprocessing import Process, Queue, JoinableQueue
-import MySQLdb
 import warnings
 from ipwhois.net import Net
 from ipwhois.asn import IPASN
@@ -24,7 +24,8 @@ warnings.filterwarnings('ignore')
 q = JoinableQueue()
 
 
-PATH = "/var/www/domainhunter.koeroo.net/"
+# PATH = "/var/www/domainhunter.koeroo.net/"
+PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
 
 
 def open_db():
@@ -378,7 +379,7 @@ def resolve_r_type(uuid_parent, fqdn, r_type, s_dt):
     try:
         resolver = dns.resolver.Resolver()
         # resolver.nameservers=['8.8.8.8', '8.8.4.4', '9.9.9.9']
-        resolver.nameservers=['127.0.0.1', '127.0.0.1', '8.8.8.8', '8.8.4.4', '9.9.9.9']
+        resolver.nameservers=['127.0.0.1']
         resolver.timeout = 10
         resolver.lifetime = 10
         answers = resolver.query(fqdn, r_type)
@@ -432,7 +433,7 @@ def add_ct_fqdn(uuid_hunt, base_fqdn, s_dt):
 def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
 
     # Start concurrent worker threads
-    num_worker_threads = 3
+    num_worker_threads = 10
     for i in range(num_worker_threads):
          t = threading.Thread(target=worker)
          t.daemon = True

@@ -22,11 +22,12 @@ asn_list = {}
 
 from pygraphviz import *
 
-PATH = '/var/www/domainhunter.koeroo.net/db/'
+PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
+
 
 def open_db():
     db_o = {}
-    db_o['connection'] = sqlite3.connect(PATH + 'domainhunter2.db')
+    db_o['connection'] = sqlite3.connect(PATH + 'db/domainhunter2.db')
     db_o['cursor'] = db_o['connection'].cursor()
 
     return db_o
