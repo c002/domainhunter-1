@@ -22,11 +22,134 @@ import json
 warnings.filterwarnings('ignore')
 
 q = JoinableQueue()
-workload = []
 
 
 # PATH = "/var/www/domainhunter.koeroo.net/"
 PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
+
+
+class Workload:
+    mem_db = {}
+
+    def __init__(self):
+        self.initialize()
+
+    def initialize(self):
+        self.mem_db['connection'] = sqlite3.connect(':memory:')
+        self.mem_db['cursor'] = self.mem_db['connection'].cursor()
+        self.mem_db['connection'].execute('''CREATE TABLE workload (fqdn TEXT, status TEXT)''')
+        self.mem_db['connection'].execute('''CREATE INDEX fqdn_i ON workload (fqdn)''')
+        self.mem_db['connection'].execute('''CREATE INDEX status_i ON workload (status)''')
+        self.mem_db['connection'].execute('''CREATE TABLE dns_rr (uuid_rr TEXT, fqdn TEXT, r_type TEXT, value TEXT)''')
+
+    def add_work(self, fqdn):
+        self.mem_db['cursor'].execute("INSERT INTO workload (fqdn, status) VALUES (:fqdn, :status)",
+            {"fqdn": fqdn, "status": "todo"})
+
+    def add_dns_rr(self, fqdn, r_type, value):
+        u = str(uuid.uuid4())
+        self.mem_db['cursor'].execute("INSERT INTO dns_rr (uuid_rr, fqdn, r_type, value) VALUES (:uuid_rr, :fqdn, :r_type, :value)",
+            {"uuid_rr":u, "fqdn":fqdn, "r_type": r_type, "value": value})
+        return u 
+
+    def get_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
+        self.mem_db['cursor'].execute("SELECT uuid_rr, fqdn, r_type, value FROM workload WHERE fqdn = :fqdn AND r_type = :r_type",
+            {"fqdn":g_fqdn, "r_type":g_r_type})
+        for (uuid_rr, fqdn, r_type, value) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_rr'] = uuid_rr
+            rec['fqdn'] = fqdn
+            rec['r_type'] = r_type
+            rec['value'] = value
+        return rec
+
+    def count_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
+        sql = ' '.join(["SELECT count(*)",
+                          "FROM dns_rr",
+                         "WHERE fqdn = :fqdn",
+                           "AND r_type = :r_type"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"fqdn":g_fqdn, "r_type":g_r_type})
+        cnt = self.mem_db['cursor'].fetchone()[0]
+        return cnt
+
+    def get_work_not_done(self):
+        fqdns = []
+        self.mem_db['cursor'].execute("SELECT fqdn FROM workload WHERE status <> :status", 
+        {"status":"done"})
+        for (fqdn,) in self.mem_db['cursor']:
+            fqdns.append(fqdn)
+
+        return fqdns
+
+    def get_work_by_fqdn(self, g_fqdn):
+        records = []
+        self.mem_db['cursor'].execute("SELECT fqdn, status FROM workload WHERE fqdn = ?", (g_fqdn,))
+        for (fqdn, status) in self.mem_db['cursor']:
+            rec = {}
+            rec['fqdn'] = fqdn
+            rec['status'] = status
+            records.append(rec)
+        return records
+
+    def get_work_by_status(self, g_status, limit=0):
+        records = []
+        sql = ' '.join(["SELECT fqdn, status ",
+                        "  FROM workload ",
+                        " WHERE status = ? "])
+        if limit != 0:
+            sql = ' '.join([sql, "LIMIT", str(limit)])
+
+        self.mem_db['cursor'].execute(sql, (g_status,))
+        for (fqdn, status) in self.mem_db['cursor']:
+            rec = {}
+            rec['fqdn'] = fqdn
+            rec['status'] = status
+            records.append(rec)
+        return records
+
+    def update_work_fqdn(self, u_fqdn, u_status):
+        records = []
+        sql = ' '.join(["UPDATE workload",
+                           "SET status = :status",
+                         "WHERE fqdn = :fqdn"])
+
+        self.mem_db['cursor'].execute(sql, {"fqdn": u_fqdn, "status": u_status})
+        return True
+
+    def count_work_status(self, c_status):
+        sql = ' '.join(["SELECT count(status)",
+                          "FROM workload",
+                         "WHERE status = :status"])
+
+        self.mem_db['cursor'].execute(sql, (c_status,))
+        cnt = self.mem_db['cursor'].fetchone()[0]
+        return cnt
+
+w = Workload()
+
+#print("add"
+#w.add('fqdn1')
+#w.add('fqdn2')
+#w.add('fqdn3')
+#w.add('fqdn4')
+#
+#print("get")
+#print(w.get('fqdn1'))
+#
+#print("get_by_status")
+#print(w.get_by_status('test'))
+#print(w.get_by_status('todo'))
+#print(w.get_by_status('todo', 1))
+#
+#print("counts")
+#print(w.count_status('todo'))
+#print(w.count_status('finished'))
+#
+#print("update")
+#w.update_fqdn('fqdn1', 'finished')
+#print(w.count_status('todo'))
+#print(w.count_status('finished'))
 
 
 def open_db():
@@ -422,14 +545,15 @@ def worker():
         q.task_done()
 
 def add_ct_fqdn(uuid_hunt, base_fqdn, s_dt):
+    results = []
     html = urlopen("https://certspotter.com/api/v0/certs?expired=false&duplicate=false&domain=" + base_fqdn)
     s = html.read()
     res = json.loads(s.decode('utf8'))
 
     for ct_cert in res:
         for fqdn in ct_cert['dns_names']:
-            workload.append(fqdn)
-
+            results.append(fqdn)
+    return results
 
 
 def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
@@ -441,18 +565,23 @@ def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
          t.start()
 
     # Add the base
-    workload.append(base_fqdn)
+    #workload.append(base_fqdn)
+    w.add_work(base_fqdn)
 
     # Add static list
     temp = open(PATH + 'research.list','r').read().splitlines()
     for prefix in temp:
-        workload.append(prefix + '.' + base_fqdn)
+        # workload.append(prefix + '.' + base_fqdn)
+        w.add_work(prefix + '.' + base_fqdn)
 
     # Use certificate transparency
-    add_ct_fqdn(uuid_hunt, base_fqdn, s_dt)
+    ct_res = add_ct_fqdn(uuid_hunt, base_fqdn, s_dt)
+    for f in ct_res:
+        w.add_work(f)
 
     # Total workload
-    for fqdn in workload:
+    l = w.get_work_not_done()
+    for fqdn in l:
         print(fqdn)
         q.put((uuid_hunt, fqdn, s_dt))
 
