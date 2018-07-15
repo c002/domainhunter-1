@@ -22,6 +22,7 @@ import json
 warnings.filterwarnings('ignore')
 
 q = JoinableQueue()
+workload = []
 
 
 # PATH = "/var/www/domainhunter.koeroo.net/"
@@ -95,6 +96,7 @@ def store_hunt_domain(uuid_hunt, fqdn, s_dt):
 
 def store_dns(uuid_child, uuid_parent, fqdn, r_type, res):
     print("store_dns", uuid_child, uuid_parent, fqdn, r_type, res, file=sys.stderr)
+
     try:
         db_o = open_db()
         db_o['cursor'].execute("INSERT INTO " +
@@ -380,8 +382,8 @@ def resolve_r_type(uuid_parent, fqdn, r_type, s_dt):
         resolver = dns.resolver.Resolver()
         # resolver.nameservers=['8.8.8.8', '8.8.4.4', '9.9.9.9']
         resolver.nameservers=['127.0.0.1']
-        resolver.timeout = 10
-        resolver.lifetime = 10
+        resolver.timeout = 2
+        resolver.lifetime = 2
         answers = resolver.query(fqdn, r_type)
         for r_data in answers:
             uuid_child = str(uuid.uuid4())
@@ -426,29 +428,33 @@ def add_ct_fqdn(uuid_hunt, base_fqdn, s_dt):
 
     for ct_cert in res:
         for fqdn in ct_cert['dns_names']:
-            print("Found with Certificate Transparency", fqdn, file=sys.stderr)
-            q.put((uuid_hunt, fqdn, s_dt))
+            workload.append(fqdn)
+
 
 
 def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
-
     # Start concurrent worker threads
-    num_worker_threads = 10
+    num_worker_threads = 50
     for i in range(num_worker_threads):
          t = threading.Thread(target=worker)
          t.daemon = True
          t.start()
 
-    # Put on the queue
-    q.put((uuid_hunt, base_fqdn, s_dt))
-
-    # Use certificate transparency
-    add_ct_fqdn(uuid_hunt, base_fqdn, s_dt)
+    # Add the base
+    workload.append(base_fqdn)
 
     # Add static list
     temp = open(PATH + 'research.list','r').read().splitlines()
     for prefix in temp:
-        q.put((uuid_hunt, prefix + '.' + base_fqdn, s_dt))
+        workload.append(prefix + '.' + base_fqdn)
+
+    # Use certificate transparency
+    add_ct_fqdn(uuid_hunt, base_fqdn, s_dt)
+
+    # Total workload
+    for fqdn in workload:
+        print(fqdn)
+        q.put((uuid_hunt, fqdn, s_dt))
 
     q.join()       # block until all tasks are done
 
