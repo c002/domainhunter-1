@@ -19,42 +19,113 @@ from urllib.request import urlopen
 import json
 
 
-warnings.filterwarnings('ignore')
-
-q = JoinableQueue()
-
-
-# PATH = "/var/www/domainhunter.koeroo.net/"
-PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
-
-
 class Workload:
     mem_db = {}
 
-    def __init__(self):
+    def __init__(self, base_fqdn):
+        self.base_fqdn = base_fqdn
+
         self.initialize()
+        self.s_dt = datetime.utcnow()
+        self.uuid_hunt = str(uuid.uuid4())
 
     def initialize(self):
         self.mem_db['connection'] = sqlite3.connect(':memory:')
         self.mem_db['cursor'] = self.mem_db['connection'].cursor()
-        self.mem_db['connection'].execute('''CREATE TABLE workload (fqdn TEXT, status TEXT)''')
-        self.mem_db['connection'].execute('''CREATE INDEX fqdn_i ON workload (fqdn)''')
-        self.mem_db['connection'].execute('''CREATE INDEX status_i ON workload (status)''')
+        self.mem_db['connection'].execute('''CREATE TABLE fqdns (uuid_fqdn, fqdn TEXT, status TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr (uuid_rr TEXT, fqdn TEXT, r_type TEXT, value TEXT)''')
+        self.mem_db['connection'].execute('''CREATE TABLE asn (uuid_asn TEXT, asn TEXT, asn_description TEXT,
+                                                               asn_date TEXT, asn_registry TEXT,
+                                                               asn_country_code TEXT, asn_cidr TEXT
+                                                              )''')
+        self.mem_db['connection'].execute('''CREATE TABLE ip (uuid_ip TEXT, ip TEXT, version TEXT)''')
+        self.mem_db['connection'].execute('''CREATE TABLE ip2asn (uuid_ip TEXT, uuid_asn TEXT)''')
+        self.mem_db['connection'].execute('''CREATE TABLE dns_rr_parent_child (uuid_parent TEXT, uuid_child TEXT)''')
+        self.mem_db['connection'].execute('''CREATE TABLE dns_rr_to_ip (uuid_rr TEXT, uuid_ip TEXT)''')
 
-    def add_work(self, fqdn):
-        self.mem_db['cursor'].execute("INSERT INTO workload (fqdn, status) VALUES (:fqdn, :status)",
-            {"fqdn": fqdn, "status": "todo"})
+    def add_dns_rr_to_ip(self, uuid_parent, uuid_child):
+        sql = ' '.join(["INSERT INTO dns_rr_to_ip",
+                                    "(uuid_rr, uuid_ip)"
+                             "VALUES (:uuid_rr, :uuid_ip)"])
+        self.mem_db['cursor'].execute(sql,
+                                     {"uuid_rr":uuid_rr,
+                                      "uuid_ip":uuid_ip})
+        return True
+
+    def add_dns_rr_parent_child(self, uuid_parent, uuid_child):
+        sql = ' '.join(["INSERT INTO dns_rr_parent_child",
+                                    "(uuid_parent, uuid_child)",
+                             "VALUES (:uuid_parent, :uuid_child)",
+        self.mem_db['cursor'].execute(sql,
+                                     {"uuid_parent":uuid_parent,
+                                      "uuid_child":uuid_child})
+        return True
+
+    def add_fqdn(self, fqdn):
+        # Status: "todo", "processing", "done"
+        u = str(uuid.uuid4())
+        sql = ' '.join(["INSERT INTO fqdns",
+                                    "(uuid_fqdn, fqdn, status)",
+                             "VALUES (:uuid_fqdn, :fqdn, :status)"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"uuid_fqdn":u,
+                                       "fqdn": fqdn,
+                                       "status": "todo"})
+        return u
 
     def add_dns_rr(self, fqdn, r_type, value):
         u = str(uuid.uuid4())
-        self.mem_db['cursor'].execute("INSERT INTO dns_rr (uuid_rr, fqdn, r_type, value) VALUES (:uuid_rr, :fqdn, :r_type, :value)",
-            {"uuid_rr":u, "fqdn":fqdn, "r_type": r_type, "value": value})
-        return u 
+        sql = ' '.join(["INSERT INTO dns_rr",
+                                    "(uuid_rr, fqdn, r_type, value)",
+                             "VALUES (:uuid_rr, :fqdn, :r_type, :value)",
+        self.mem_db['cursor'].execute(sql,
+                                      {"uuid_rr":u,
+                                       "fqdn":fqdn,
+                                       "r_type": r_type,
+                                       "value": value})
+        return u
+
+    def add_asn(self, asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr):
+        u = str(uuid.uuid4())
+        sql = ' '.join(["INSERT INTO asn",
+                                   "(uuid_asn, asn, asn_description,",
+                                    "asn_date, asn_registry, asn_country_code,",
+                                    "asn_cidr)",
+                            "VALUES (:uuid_asn, :asn, :asn_description,",
+                                    ":asn_date, :asn_registry, :asn_country_code,",
+                                    ":asn_cidr)"])
+        self.mem_db['cursor'].execute(sql,
+                                     {"uuid_asn":u,
+                                      "asn":asn,
+                                      "asn_description":asn_description,
+                                      "asn_date":asn_date,
+                                      "asn_registry":asn_registry,
+                                      "asn_country_code":asn_country_code,
+                                      "asn_cidr":asn_cidr})
+        return u
+
+    def add_ip(self, ip, version):
+        u = str(uuid.uuid4())
+        sql = ' '.join(["INSERT INTO ip (uuid_ip, ip, version)",
+                                "VALUES (:uuid_ip, :ip, :version)"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"uuid_ip":u, "ip":ip, "version":version})
+        return u
+
+    def add_ip2asn(self, uuid_ip, uuid_asn):
+        sql = ' '.join(["INSERT INTO ip2asn (uuid_ip, uuid_asn)",
+                                    "VALUES (:uuid_ip, :uuid_asn)"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"uuid_ip":uuid_ip, "uuid_asn":uuid_asn})
+        return True
 
     def get_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
-        self.mem_db['cursor'].execute("SELECT uuid_rr, fqdn, r_type, value FROM workload WHERE fqdn = :fqdn AND r_type = :r_type",
-            {"fqdn":g_fqdn, "r_type":g_r_type})
+        sql = ' '.join(["SELECT uuid_rr, fqdn, r_type, value",
+                          "FROM fqdns",
+                         "WHERE fqdn = :fqdn",
+                           "AND r_type = :r_type"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"fqdn":g_fqdn, "r_type":g_r_type})
         for (uuid_rr, fqdn, r_type, value) in self.mem_db['cursor']:
             rec = {}
             rec['uuid_rr'] = uuid_rr
@@ -73,29 +144,37 @@ class Workload:
         cnt = self.mem_db['cursor'].fetchone()[0]
         return cnt
 
-    def get_work_not_done(self):
+    def get_fqdns_not_done(self):
         fqdns = []
-        self.mem_db['cursor'].execute("SELECT fqdn FROM workload WHERE status <> :status", 
-        {"status":"done"})
+        sql = ' '.join(["SELECT fqdn",
+                          "FROM fqdns",
+                         "WHERE status <> :status"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"status":"done"})
         for (fqdn,) in self.mem_db['cursor']:
             fqdns.append(fqdn)
 
         return fqdns
 
-    def get_work_by_fqdn(self, g_fqdn):
+    def get_fqdns_by_fqdn(self, g_fqdn):
         records = []
-        self.mem_db['cursor'].execute("SELECT fqdn, status FROM workload WHERE fqdn = ?", (g_fqdn,))
-        for (fqdn, status) in self.mem_db['cursor']:
+        sql = ' '.join(["SELECT uuid_fqdn, fqdn, status",
+                          "FROM fqdns",
+                         "WHERE fqdn = :fqdn"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"fqdn":g_fqdn})
+        for (uuid_fqdn, fqdn, status) in self.mem_db['cursor']:
             rec = {}
+            rec['uuid'] = uuid_fqdn
             rec['fqdn'] = fqdn
             rec['status'] = status
             records.append(rec)
         return records
 
-    def get_work_by_status(self, g_status, limit=0):
+    def get_fqdns_by_status(self, g_status, limit=0):
         records = []
         sql = ' '.join(["SELECT fqdn, status ",
-                        "  FROM workload ",
+                        "  FROM fqdns",
                         " WHERE status = ? "])
         if limit != 0:
             sql = ' '.join([sql, "LIMIT", str(limit)])
@@ -108,25 +187,33 @@ class Workload:
             records.append(rec)
         return records
 
-    def update_work_fqdn(self, u_fqdn, u_status):
+    def update_fqdns_status_by_fqdn(self, u_fqdn, u_status):
         records = []
-        sql = ' '.join(["UPDATE workload",
+        sql = ' '.join(["UPDATE fqdns",
                            "SET status = :status",
                          "WHERE fqdn = :fqdn"])
-
-        self.mem_db['cursor'].execute(sql, {"fqdn": u_fqdn, "status": u_status})
+        self.mem_db['cursor'].execute(sql, 
+                                      {"fqdn": u_fqdn,
+                                       "status": u_status})
         return True
 
-    def count_work_status(self, c_status):
-        sql = ' '.join(["SELECT count(status)",
-                          "FROM workload",
-                         "WHERE status = :status"])
-
-        self.mem_db['cursor'].execute(sql, (c_status,))
+    def count_fqdns_by_fqdn(self, c_fqdn):
+        sql = ' '.join(["SELECT count(fqdn)",
+                          "FROM fqdns",
+                         "WHERE fqdn = :fqdn"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"fqdn":c_fqdn})
         cnt = self.mem_db['cursor'].fetchone()[0]
         return cnt
 
-w = Workload()
+    def count_fqdns_by_status(self, c_status):
+        sql = ' '.join(["SELECT count(status)",
+                          "FROM fqdns",
+                         "WHERE status = :status"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"status":c_status})
+        cnt = self.mem_db['cursor'].fetchone()[0]
+        return cnt
 
 #print("add"
 #w.add('fqdn1')
@@ -293,10 +380,9 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
 
         if val_type == 'FQDN':
             # Need to resolve this FQDN again, but with the current uuid_child as its parent
-            q.put((uuid_child, val, s_dt))
+            if w.count_fqdns_by_fqdn(val) == 0:
+                w.add_fqdn(val)
 
-
-        ### Logic starts here
 
         # Planned exit or stop condition
         if  (key_type == 'FQDN' and (val_type == 'CAA' or val_type == 'SOA')) or \
@@ -312,6 +398,7 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
             # The NS value is an FQDN per default
             print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
             q.put((uuid_child, val, s_dt))
+            w.add_fqdn(val)
 
         elif key_type == 'FQDN' and val_type == 'CNAME':
             print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
@@ -499,20 +586,30 @@ def analyse_asn(ip):
 
 
 def resolve_r_type(uuid_parent, fqdn, r_type, s_dt):
+    if w.count_dns_rr_by_fqdn_and_r_type(fqdn, r_type) > 0:
+        # The FQDN and Resource Type has been processed, no need to resolve it again.
+        print("FQDN + Resource Type already resolved, skipping", fqdn, r_type, file=sys.stderr)
+        return
+
+
+    ### DNS Resolve FQDN with resource type
     answers = None
     q_dt = datetime.utcnow()
     try:
         resolver = dns.resolver.Resolver()
         # resolver.nameservers=['8.8.8.8', '8.8.4.4', '9.9.9.9']
         resolver.nameservers=['127.0.0.1']
-        resolver.timeout = 2
-        resolver.lifetime = 2
+        resolver.timeout = 8
+        resolver.lifetime = 8
         answers = resolver.query(fqdn, r_type)
+
         for r_data in answers:
-            uuid_child = str(uuid.uuid4())
-            store_dns      (uuid_child, uuid_parent, fqdn, r_type, str(r_data))
+            # Adding a DNS RR generates a new UUID, then link the parent to this.
+            uuid_child = w.add_dns_rr(fqdn, r_type, str(r_data))
+            w.add_dns_rr_parent_child(uuid_parent, uuid_child)
+
+            # Let's go deeper with this RR
             analyse_record2(uuid_child, uuid_parent, fqdn, "FQDN", str(r_data), r_type, "RESOLVED", "", q_dt, "")
-#            analyse_record(uuid_child, uuid_parent, fqdn, r_type, r_data, s_dt)
 
     except dns.resolver.NXDOMAIN:
         # Ignore the NXDOMAINs
@@ -558,38 +655,48 @@ def add_ct_fqdn(uuid_hunt, base_fqdn, s_dt):
 
 def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
     # Start concurrent worker threads
-    num_worker_threads = 50
-    for i in range(num_worker_threads):
-         t = threading.Thread(target=worker)
-         t.daemon = True
-         t.start()
+    threaded = False
+    if threaded:
+        num_worker_threads = 50
+        for i in range(num_worker_threads):
+             t = threading.Thread(target=worker)
+             t.daemon = True
+             t.start()
 
     # Add the base
     #workload.append(base_fqdn)
-    w.add_work(base_fqdn)
+    w.add_fqdn(base_fqdn)
 
     # Add static list
     temp = open(PATH + 'research.list','r').read().splitlines()
     for prefix in temp:
-        # workload.append(prefix + '.' + base_fqdn)
-        w.add_work(prefix + '.' + base_fqdn)
+        w.add_fqdn(prefix + '.' + base_fqdn)
 
     # Use certificate transparency
     ct_res = add_ct_fqdn(uuid_hunt, base_fqdn, s_dt)
     for f in ct_res:
-        w.add_work(f)
+        w.add_fqdn(f)
 
     # Total workload
-    l = w.get_work_not_done()
+    l = w.get_fqdns_not_done()
     for fqdn in l:
         print(fqdn)
-        q.put((uuid_hunt, fqdn, s_dt))
+        if threaded:
+            q.put((uuid_hunt, fqdn, s_dt))
+        else:
+            resolve_multi_type(uuid_hunt, fqdn, s_dt)
+            w.update_fqdns_status_by_fqdn(fqdn, "done")
 
-    q.join()       # block until all tasks are done
+    if threaded:
+        q.join()       # block until all tasks are done
 
 
 
 ### MAIN ###
+warnings.filterwarnings('ignore')
+q = JoinableQueue()
+PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
+
 if len(sys.argv) != 2:
     print("Please provide one domain name only")
     sys.exit(1)
@@ -601,14 +708,13 @@ create_db()
 base_fqdn = sys.argv[1]
 
 # Generate UUID for this hunt
-uuid_hunt = str(uuid.uuid4())
-s_dt = datetime.utcnow()
+w = Workload(base_fqdn)
 
 # Generic storage of this try.
-store_hunt_domain(uuid_hunt, base_fqdn, s_dt)
+store_hunt_domain(w.uuid_hunt, w.base_fqdn, w.s_dt)
 
 
-print(str(uuid_hunt), "for a search on base FQDN", base_fqdn, "started at", str(s_dt), file=sys.stdout)
+print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", str(w.s_dt), file=sys.stdout)
 
 # Start here...
-resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt)
+resolve_multi_sub_domains(w.uuid_hunt, w.base_fqdn, w.s_dt)
