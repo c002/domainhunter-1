@@ -17,6 +17,7 @@ import re
 import sqlite3
 from urllib.request import urlopen
 import json
+from pygraphviz import *
 
 
 class Workload:
@@ -63,6 +64,18 @@ class Workload:
                                      {"uuid_parent":uuid_parent,
                                       "uuid_child":uuid_child})
         return True
+
+    def get_dns_rr_parent_child(self):
+        dns_rr_parent_child = []
+        sql = ' '.join(["SELECT uuid_parent, uuid_child",
+                          "FROM dns_rr_parent_child"])
+        self.mem_db['cursor'].execute(sql)
+        for (uuid_parent, uuid_child) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_parent'] = uuid_parent 
+            rec['uuid_child'] = uuid_child
+            dns_rr_parent_child.append(rec)
+        return dns_rr_parent_child
 
     def add_fqdn(self, fqdn):
         # Status: "todo", "processing", "done"
@@ -177,6 +190,20 @@ class Workload:
                                       {"uuid_ip":uuid_ip, "uuid_asn":uuid_asn})
         return True
 
+    def get_dns_rr(self):
+        all_dns_rr = []
+        sql = ' '.join(["SELECT uuid_rr, fqdn, r_type, value",
+                          "FROM dns_rr"])
+        self.mem_db['cursor'].execute(sql)
+        for (uuid_rr, fqdn, r_type, value) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_rr'] = uuid_rr
+            rec['fqdn'] = fqdn
+            rec['r_type'] = r_type
+            rec['value'] = value
+            all_dns_rr.append(rec)
+        return all_dns_rr
+
     def get_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
         sql = ' '.join(["SELECT uuid_rr, fqdn, r_type, value",
                           "FROM fqdns",
@@ -190,6 +217,7 @@ class Workload:
             rec['fqdn'] = fqdn
             rec['r_type'] = r_type
             rec['value'] = value
+        # Risky return, only the last record... could be more!
         return rec
 
     def count_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
@@ -272,6 +300,67 @@ class Workload:
                                       {"status":c_status})
         cnt = self.mem_db['cursor'].fetchone()[0]
         return cnt
+
+    def plot(self):
+        self.MainGraph.add_node(self.uuid_hunt, style='filled', color='blue', fontcolor='white', 
+                                           label="Main search domain is:\n" + self.base_fqdn)
+
+        # Plot the FQDN with RR results and tie that to the main node
+        all_dns_rr = self.get_dns_rr()
+        for rec in all_dns_rr:
+            # Color by RR type
+            if rec['r_type'] == "CAA":
+                color = 'yellow'
+                fontcolor = 'black'
+            elif rec['r_type'] == "NS":
+                color = 'darkgoldenrod1'
+                fontcolor = 'blue'
+            elif rec['r_type'] == "MX":
+                color = 'orange'
+                fontcolor = 'blue'
+            elif rec['r_type'] == "SOA":
+                color = 'black'
+                fontcolor = 'white'
+            elif rec['r_type'] == "A":
+                color = 'red'
+                fontcolor = 'white'
+            elif rec['r_type'] == "AAAA":
+                color = 'crimson'
+                fontcolor = 'white'
+            elif rec['r_type'] == "CNAME":
+                color = 'gray40'
+                fontcolor = 'white'
+            elif rec['r_type'] == "TXT":
+                color = 'darkviolet'
+                fontcolor = 'white'
+            else:
+                color = 'red'
+                fontcolor = 'black'
+
+            # Plot all the nodes
+            self.MainGraph.add_node(rec['uuid_rr'], style='filled', 
+                                                    color=color, 
+                                                    fontcolor=fontcolor, 
+                                    label=rec['fqdn'] + "\n" + rec['r_type'] + "\n" + rec['value'])
+
+        # Plot the DNS RR Type linkages
+        all_dns_rr_parent_child = self.get_dns_rr_parent_child()
+        for rec in all_dns_rr_parent_child:
+            # Link up node
+            self.MainGraph.add_edge(rec['uuid_parent'], rec['uuid_child'])
+
+
+    def draw(self, destination):
+        # Init graphviz
+        self.MainGraph = AGraph(overlap=False,rankdir="LR")
+
+        # Plot the map
+        self.plot()
+
+        # Finish lay-out and write the graph
+        self.MainGraph.layout()
+        self.MainGraph.draw(destination, prog='dot')
+
 
 #print("add"
 #w.add('fqdn1')
@@ -759,19 +848,19 @@ def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
     for f in ct_res:
         w.add_fqdn(f)
 
-    print("Count todo", w.count_fqdns_by_status("todo"))
-    print("Count done", w.count_fqdns_by_status("done"))
+    print("Count todo", w.count_fqdns_by_status("todo"), file=sys.stderr)
+    print("Count done", w.count_fqdns_by_status("done"), file=sys.stderr)
 
     # Total workload
     while True:
         l = w.get_fqdns_not_done()
         if len(l) == 0:
-            print("Count todo", w.count_fqdns_by_status("todo"))
-            print("Count done", w.count_fqdns_by_status("done"))
+            print("Count todo", w.count_fqdns_by_status("todo"), file=sys.stderr)
+            print("Count done", w.count_fqdns_by_status("done"), file=sys.stderr)
             break
 
         for fqdn in l:
-            print(fqdn)
+            print("FQDN to examine (workload)", fqdn, file=sys.stderr)
             #print(fqdn, file=sys.stderr)
             if threaded:
                 q.put((uuid_hunt, fqdn, s_dt))
@@ -782,8 +871,8 @@ def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
         if threaded:
             q.join()       # block until all tasks are done
 
-        print("Count todo", w.count_fqdns_by_status("todo"))
-        print("Count done", w.count_fqdns_by_status("done"))
+        print("Count todo", w.count_fqdns_by_status("todo"), file=sys.stderr)
+        print("Count done", w.count_fqdns_by_status("done"), file=sys.stderr)
 
 
 ##### MAIN #####
@@ -800,6 +889,7 @@ if threaded:
 parser = argparse.ArgumentParser("domainhunter2.py")
 parser.add_argument("--inject-uuid", help="UUID to inject as the primary key to this particular hunt.", type=str)
 parser.add_argument('--debug', default=False, action="store_true", help="Print debug output")
+parser.add_argument('--output', default=False, action="store_true", help="Draw output to this file")
 parser.add_argument('domain', help="This domain will be hunted", type=str)
 args = parser.parse_args()
 
@@ -814,6 +904,9 @@ print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", 
 # Start the hunt
 resolve_multi_sub_domains(w.uuid_hunt, w.base_fqdn, w.s_dt)
 
+# Draw
+if not args.output:
+    w.draw(args.output)
 
 ##### MAIN #####
 
