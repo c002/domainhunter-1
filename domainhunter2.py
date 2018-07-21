@@ -22,12 +22,15 @@ import json
 class Workload:
     mem_db = {}
 
-    def __init__(self, base_fqdn):
+    def __init__(self, base_fqdn, uuid_hunt=None):
         self.base_fqdn = base_fqdn
 
         self.initialize()
         self.s_dt = datetime.utcnow()
-        self.uuid_hunt = str(uuid.uuid4())
+        if uuid_hunt is None:
+            self.uuid_hunt = str(uuid.uuid4())
+        else:
+            self.uuid_hunt = uuid_hunt
 
     def initialize(self):
         self.mem_db['connection'] = sqlite3.connect(':memory:')
@@ -735,7 +738,6 @@ def add_ct_fqdn(uuid_hunt, base_fqdn, s_dt):
 
 def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
     # Start concurrent worker threads
-    threaded = False
     if threaded:
         num_worker_threads = 50
         for i in range(num_worker_threads):
@@ -784,31 +786,41 @@ def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
         print("Count done", w.count_fqdns_by_status("done"))
 
 
-### MAIN ###
-warnings.filterwarnings('ignore')
-q = JoinableQueue()
+##### MAIN #####
+import argparse
+
+# Init
 PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
+warnings.filterwarnings('ignore')
+threaded = False
+if threaded:
+    q = JoinableQueue()
 
-if len(sys.argv) != 2:
-    print("Please provide one domain name only")
-    sys.exit(1)
+# Parser
+parser = argparse.ArgumentParser("domainhunter2.py")
+parser.add_argument("--inject-uuid", help="UUID to inject as the primary key to this particular hunt.", type=str)
+parser.add_argument('--debug', default=False, action="store_true", help="Print debug output")
+parser.add_argument('domain', help="This domain will be hunted", type=str)
+args = parser.parse_args()
 
-# Create the database, incl tables
-create_db()
-
-# Target to hunt
-base_fqdn = sys.argv[1]
-
-# Generate UUID for this hunt
-w = Workload(base_fqdn)
-
-# Generic storage of this try.
-store_hunt_domain(w.uuid_hunt, w.base_fqdn, w.s_dt)
-
+# Generate or Get UUID for this hunt
+if not args.inject_uuid:
+    w = Workload(args.domain)
+else:
+    w = Workload(args.domain, args.inject_uuid)
 
 print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", str(w.s_dt), file=sys.stdout)
 
-# Start here...
+# Start the hunt
 resolve_multi_sub_domains(w.uuid_hunt, w.base_fqdn, w.s_dt)
+
+
+##### MAIN #####
+
+
+## Generic storage of this try.
+## Create the database, incl tables
+#create_db()
+#store_hunt_domain(w.uuid_hunt, w.base_fqdn, w.s_dt)
 
 
