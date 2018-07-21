@@ -43,7 +43,7 @@ class Workload:
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr_parent_child (uuid_parent TEXT, uuid_child TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr_to_ip (uuid_rr TEXT, uuid_ip TEXT)''')
 
-    def add_dns_rr_to_ip(self, uuid_parent, uuid_child):
+    def add_dns_rr_to_ip(self, uuid_rr, uuid_ip):
         sql = ' '.join(["INSERT INTO dns_rr_to_ip",
                                     "(uuid_rr, uuid_ip)"
                              "VALUES (:uuid_rr, :uuid_ip)"])
@@ -55,7 +55,7 @@ class Workload:
     def add_dns_rr_parent_child(self, uuid_parent, uuid_child):
         sql = ' '.join(["INSERT INTO dns_rr_parent_child",
                                     "(uuid_parent, uuid_child)",
-                             "VALUES (:uuid_parent, :uuid_child)",
+                             "VALUES (:uuid_parent, :uuid_child)"])
         self.mem_db['cursor'].execute(sql,
                                      {"uuid_parent":uuid_parent,
                                       "uuid_child":uuid_child})
@@ -77,7 +77,7 @@ class Workload:
         u = str(uuid.uuid4())
         sql = ' '.join(["INSERT INTO dns_rr",
                                     "(uuid_rr, fqdn, r_type, value)",
-                             "VALUES (:uuid_rr, :fqdn, :r_type, :value)",
+                             "VALUES (:uuid_rr, :fqdn, :r_type, :value)"])
         self.mem_db['cursor'].execute(sql,
                                       {"uuid_rr":u,
                                        "fqdn":fqdn,
@@ -104,6 +104,38 @@ class Workload:
                                       "asn_cidr":asn_cidr})
         return u
 
+    def count_asn_by_asn_and_asn_cidr(self, c_asn, c_asn_cidr):
+        sql = ' '.join(["SELECT count(*)"
+                          "FROM asn",
+                         "WHERE asn = :asn",
+                           "AND asn_cidr = :asn_cidr"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"asn":c_asn, "asn_cidr":c_asn_cidr})
+        cnt = self.mem_db['cursor'].fetchone()[0]
+        return cnt
+
+    def get_asn_by_asn_and_asn_cidr(self, c_asn, c_asn_cidr):
+        sql = ' '.join(["SELECT uuid_asn, asn, asn_description,",
+                               "asn_date, asn_registry, asn_country_code,",
+                               "asn_cidr",
+                          "FROM asn",
+                         "WHERE asn = :asn",
+                           "AND asn_cidr = :asn_cidr"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"asn":c_asn, "asn_cidr":c_asn_cidr})
+        for (uuid_asn, asn, asn_description, asn_date, 
+             asn_registry, asn_country_code, asn_cidr) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_asn'] = uuid_asn
+            rec['asn'] = asn
+            rec['asn_description'] = asn_description
+            rec['asn_date'] = asn_date
+            rec['asn_registry'] = asn_registry
+            rec['asn_country_code'] = asn_country_code
+            rec['asn_cidr'] = asn_cidr
+            # Only get the first, yes, indenting matters
+            return rec
+
     def add_ip(self, ip, version):
         u = str(uuid.uuid4())
         sql = ' '.join(["INSERT INTO ip (uuid_ip, ip, version)",
@@ -111,6 +143,29 @@ class Workload:
         self.mem_db['cursor'].execute(sql,
                                       {"uuid_ip":u, "ip":ip, "version":version})
         return u
+
+    def count_ip_by_ip(self, c_ip):
+        sql = ' '.join(["SELECT count(ip)",
+                          "FROM ip",
+                         "WHERE ip = :ip"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"ip":c_ip})
+        cnt = self.mem_db['cursor'].fetchone()[0]
+        return cnt
+
+    def get_ip_by_ip(self, g_ip):
+        sql = ' '.join(["SELECT uuid_ip, ip, version",
+                          "FROM ip",
+                         "WHERE ip = :ip"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"ip":g_ip})
+        for (uuid_ip, ip, version) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_ip'] = uuid_ip
+            rec['ip'] = ip
+            rec['version'] = version
+            # Only get the first, yes, indenting matters
+            return rec
 
     def add_ip2asn(self, uuid_ip, uuid_asn):
         sql = ' '.join(["INSERT INTO ip2asn (uuid_ip, uuid_asn)",
@@ -393,27 +448,32 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
                    'val_type', val_type,
                    'value', val,
                    file=sys.stderr)
+            return
 
         elif key_type == 'FQDN' and val_type == 'NS':
             # The NS value is an FQDN per default
             print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
-            q.put((uuid_child, val, s_dt))
-            w.add_fqdn(val)
+            if w.count_fqdns_by_fqdn(val) == 0:
+                w.add_fqdn(val)
+            return
 
         elif key_type == 'FQDN' and val_type == 'CNAME':
             print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
             d = str(val)[:-1]
-            q.put((uuid_child, d, s_dt))
+            if w.count_fqdns_by_fqdn(val) == 0:
+                w.add_fqdn(val)
 
         elif key_type == 'FQDN' and val_type == 'MX':
             print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
             priority = val.split()[0]
             exchange = val.split()[1][:-1]
-            q.put((uuid_child, exchange, s_dt))
+            if w.count_fqdns_by_fqdn(exchange) == 0:
+                w.add_fqdn(exchange)
 
         elif key_type == 'SPF1' and val_type == "INCLUDE":
             print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
-            q.put((uuid_child, val, s_dt))
+            if w.count_fqdns_by_fqdn(val) == 0:
+                w.add_fqdn(val)
 
         elif val_type == 'TXT':
             print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
@@ -509,25 +569,45 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
         ### Error handling CIDR notation -
         ### elif val_type == 'A' or val_type == 'AAAA' or val_type == "IPV4_CIDR" or val_type == "IPV6_CIDR":
         elif val_type == 'A' or val_type == 'AAAA':
-            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
-            uuid_child_child = str(uuid.uuid4())
+            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 
+                   'val_type', val_type, 'value', val, file=sys.stderr)
 
-            # Take A or AAAA value to resolve as part of an AS plus AS info
-            asn_result = analyse_asn(val)
+            # Currenct RR is uuid_child, which has an A result.
+            # This is stored already. Need to add the IP
+            # and bind the IP uuid to the RR uuid, which is the child_uuid 
+            if w.count_ip_by_ip(val) == 0:
+                if val_type == 'A':
+                    uuid_ip = w.add_ip(val, 4)
+                elif val_type == 'AAAA':
+                    uuid_ip = w.add_ip(val, 6)
 
-            uuid_asn = fetch_asn_uuid(asn_result['asn'], asn_result['asn_description'],
-                                      asn_result['asn_date'], asn_result['asn_registry'],
-                                      asn_result['asn_country_code'], asn_result['asn_cidr'])
-            if uuid_asn is None:
-                store_asn (uuid_child_child, uuid_child, asn_result['asn'], asn_result['asn_description'],
-                                                         asn_result['asn_date'], asn_result['asn_registry'],
-                                                         asn_result['asn_country_code'], asn_result['asn_cidr'])
-                uuid_asn = fetch_asn_uuid(asn_result['asn'], asn_result['asn_description'],
-                                          asn_result['asn_date'], asn_result['asn_registry'],
-                                          asn_result['asn_country_code'], asn_result['asn_cidr'])
+                    # The new IP needs an ASN resolve and IP to ASN attachment
+                    # Take A or AAAA value to resolve as part of an AS plus AS info
+                    asn_result = analyse_asn(val)
 
-            # Map DNS record (here an A or AAAA) to ASN
-            store_dns_to_asn(uuid_hunt, uuid_child, uuid_asn)
+                    # The IP is now resolved to an ASN. Did we have this one from another ASN?
+                    # If yes, get that one, if not, create a new one.
+                    # Result is an uuid_asn
+                    if w.count_asn_by_asn_and_asn_cidr(asn_result['asn'],
+                                                       asn_result['asn_cidr']) == 0:
+                        uuid_asn = w.add_asn(asn_result['asn'], asn_result['asn_description'],
+                                             asn_result['asn_date'], asn_result['asn_registry'],
+                                             asn_result['asn_country_code'], asn_result['asn_cidr'])
+                    else:
+                        rec_asn = w.get_asn_by_asn_and_asn_cidr(asn_result['asn'],
+                                                                asn_result['asn_cidr'])
+                        uuid_asn = rec_asn['uuid_asn']
+
+                    # Combine this IP address with an the ASN per CIDR
+                    w.add_ip2asn(uuid_ip, uuid_asn)
+
+                    # TODO: ASN registration to AS number for linkage across CIDRs
+            else:
+                rec_ip = w.get_ip_by_ip(val)
+                uuid_ip = rec_ip['ip']
+
+            # in all cases, uuid_ip is the new one or the existing one
+            w.add_dns_rr_to_ip(uuid_child, uuid_ip)
 
         else:
             print ("analyse_record2", "Final reached",
@@ -538,8 +618,8 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
                    file=sys.stderr)
 
     except Exception as inst:
-        print("analyse_record2", "Error:", type(inst), inst, 'key_type', key_type, 'val_type', val_type, file=sys.stderr)
-
+        print("analyse_record2", "Error:", type(inst), inst,
+              'key_type', key_type, 'val_type', val_type, file=sys.stderr)
 
 
 def analyse_asn(ip):
@@ -677,19 +757,31 @@ def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
     for f in ct_res:
         w.add_fqdn(f)
 
+    print("Count todo", w.count_fqdns_by_status("todo"))
+    print("Count done", w.count_fqdns_by_status("done"))
+
     # Total workload
-    l = w.get_fqdns_not_done()
-    for fqdn in l:
-        print(fqdn)
+    while True:
+        l = w.get_fqdns_not_done()
+        if len(l) == 0:
+            print("Count todo", w.count_fqdns_by_status("todo"))
+            print("Count done", w.count_fqdns_by_status("done"))
+            break
+
+        for fqdn in l:
+            print(fqdn)
+            #print(fqdn, file=sys.stderr)
+            if threaded:
+                q.put((uuid_hunt, fqdn, s_dt))
+            else:
+                resolve_multi_type(uuid_hunt, fqdn, s_dt)
+                w.update_fqdns_status_by_fqdn(fqdn, "done")
+
         if threaded:
-            q.put((uuid_hunt, fqdn, s_dt))
-        else:
-            resolve_multi_type(uuid_hunt, fqdn, s_dt)
-            w.update_fqdns_status_by_fqdn(fqdn, "done")
+            q.join()       # block until all tasks are done
 
-    if threaded:
-        q.join()       # block until all tasks are done
-
+        print("Count todo", w.count_fqdns_by_status("todo"))
+        print("Count done", w.count_fqdns_by_status("done"))
 
 
 ### MAIN ###
@@ -718,3 +810,5 @@ print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", 
 
 # Start here...
 resolve_multi_sub_domains(w.uuid_hunt, w.base_fqdn, w.s_dt)
+
+
