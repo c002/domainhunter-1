@@ -20,6 +20,8 @@ import json
 from pygraphviz import *
 
 
+### Classes
+
 class Workload:
     mem_db = {}
 
@@ -36,7 +38,7 @@ class Workload:
     def initialize(self):
         self.mem_db['connection'] = sqlite3.connect(':memory:')
         self.mem_db['cursor'] = self.mem_db['connection'].cursor()
-        self.mem_db['connection'].execute('''CREATE TABLE fqdns (uuid_fqdn, fqdn TEXT, status TEXT)''')
+        self.mem_db['connection'].execute('''CREATE TABLE fqdns (uuid_fqdn, fqdn TEXT, status TEXT, uuid_parent TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr (uuid_rr TEXT, fqdn TEXT, r_type TEXT, value TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE asn (uuid_asn TEXT, asn TEXT, asn_description TEXT,
                                                                asn_date TEXT, asn_registry TEXT,
@@ -77,16 +79,17 @@ class Workload:
             dns_rr_parent_child.append(rec)
         return dns_rr_parent_child
 
-    def add_fqdn(self, fqdn):
+    def add_fqdn(self, fqdn, uuid_parent):
         # Status: "todo", "processing", "done"
         u = str(uuid.uuid4())
         sql = ' '.join(["INSERT INTO fqdns",
-                                    "(uuid_fqdn, fqdn, status)",
-                             "VALUES (:uuid_fqdn, :fqdn, :status)"])
+                                    "(uuid_fqdn, fqdn, status, uuid_parent)",
+                             "VALUES (:uuid_fqdn, :fqdn, :status, :uuid_parent)"])
         self.mem_db['cursor'].execute(sql,
                                       {"uuid_fqdn":u,
                                        "fqdn": fqdn,
-                                       "status": "todo"})
+                                       "status": "todo",
+                                       "uuid_parent": uuid_parent})
         return u
 
     def add_dns_rr(self, fqdn, r_type, value):
@@ -204,22 +207,6 @@ class Workload:
             all_dns_rr.append(rec)
         return all_dns_rr
 
-    def get_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
-        sql = ' '.join(["SELECT uuid_rr, fqdn, r_type, value",
-                          "FROM fqdns",
-                         "WHERE fqdn = :fqdn",
-                           "AND r_type = :r_type"])
-        self.mem_db['cursor'].execute(sql,
-                                      {"fqdn":g_fqdn, "r_type":g_r_type})
-        for (uuid_rr, fqdn, r_type, value) in self.mem_db['cursor']:
-            rec = {}
-            rec['uuid_rr'] = uuid_rr
-            rec['fqdn'] = fqdn
-            rec['r_type'] = r_type
-            rec['value'] = value
-        # Risky return, only the last record... could be more!
-        return rec
-
     def count_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
         sql = ' '.join(["SELECT count(*)",
                           "FROM dns_rr",
@@ -231,45 +218,34 @@ class Workload:
         return cnt
 
     def get_fqdns_not_done(self):
-        fqdns = []
-        sql = ' '.join(["SELECT fqdn",
+        records = []
+        sql = ' '.join(["SELECT uuid_fqdn, fqdn, status, uuid_parent",
                           "FROM fqdns",
                          "WHERE status <> :status"])
         self.mem_db['cursor'].execute(sql,
                                       {"status":"done"})
-        for (fqdn,) in self.mem_db['cursor']:
-            fqdns.append(fqdn)
-
-        return fqdns
-
-    def get_fqdns_by_fqdn(self, g_fqdn):
-        records = []
-        sql = ' '.join(["SELECT uuid_fqdn, fqdn, status",
-                          "FROM fqdns",
-                         "WHERE fqdn = :fqdn"])
-        self.mem_db['cursor'].execute(sql,
-                                      {"fqdn":g_fqdn})
-        for (uuid_fqdn, fqdn, status) in self.mem_db['cursor']:
+        for (uuid_fqdn, fqdn, status, uuid_parent) in self.mem_db['cursor']:
             rec = {}
             rec['uuid'] = uuid_fqdn
             rec['fqdn'] = fqdn
             rec['status'] = status
+            rec['uuid_parent'] = uuid_parent
             records.append(rec)
         return records
 
-    def get_fqdns_by_status(self, g_status, limit=0):
+    def get_fqdns_by_fqdn(self, g_fqdn):
         records = []
-        sql = ' '.join(["SELECT fqdn, status ",
-                        "  FROM fqdns",
-                        " WHERE status = ? "])
-        if limit != 0:
-            sql = ' '.join([sql, "LIMIT", str(limit)])
-
-        self.mem_db['cursor'].execute(sql, (g_status,))
-        for (fqdn, status) in self.mem_db['cursor']:
+        sql = ' '.join(["SELECT uuid_fqdn, fqdn, status, uuid_parent",
+                          "FROM fqdns",
+                         "WHERE fqdn = :fqdn"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"fqdn":g_fqdn})
+        for (uuid_fqdn, fqdn, status, uuid_parent) in self.mem_db['cursor']:
             rec = {}
+            rec['uuid'] = uuid_fqdn
             rec['fqdn'] = fqdn
             rec['status'] = status
+            rec['uuid_parent'] = uuid_parent
             records.append(rec)
         return records
 
@@ -362,29 +338,7 @@ class Workload:
         self.MainGraph.draw(destination, prog='dot')
 
 
-#print("add"
-#w.add('fqdn1')
-#w.add('fqdn2')
-#w.add('fqdn3')
-#w.add('fqdn4')
-#
-#print("get")
-#print(w.get('fqdn1'))
-#
-#print("get_by_status")
-#print(w.get_by_status('test'))
-#print(w.get_by_status('todo'))
-#print(w.get_by_status('todo', 1))
-#
-#print("counts")
-#print(w.count_status('todo'))
-#print(w.count_status('finished'))
-#
-#print("update")
-#w.update_fqdn('fqdn1', 'finished')
-#print(w.count_status('todo'))
-#print(w.count_status('finished'))
-
+### Functions
 
 def open_db():
     db_o = {}
@@ -528,8 +482,7 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
         if val_type == 'FQDN':
             # Need to resolve this FQDN again, but with the current uuid_child as its parent
             if w.count_fqdns_by_fqdn(val) == 0:
-                w.add_fqdn(val)
-
+                w.add_fqdn(val, uuid_child)
 
         # Planned exit or stop condition
         if  (key_type == 'FQDN' and (val_type == 'CAA' or val_type == 'SOA')) or \
@@ -544,31 +497,41 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
 
         elif key_type == 'FQDN' and val_type == 'NS':
             # The NS value is an FQDN per default
-            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
+            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k,
+                                               'val_type', val_type, 'value', val,
+                                                file=sys.stderr)
             if w.count_fqdns_by_fqdn(val) == 0:
-                w.add_fqdn(val)
+                w.add_fqdn(val, uuid_child)
             return
 
         elif key_type == 'FQDN' and val_type == 'CNAME':
-            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
+            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k,
+                                               'val_type', val_type, 'value', val,
+                                               file=sys.stderr)
             d = str(val)[:-1]
             if w.count_fqdns_by_fqdn(val) == 0:
-                w.add_fqdn(val)
+                w.add_fqdn(val, uuid_child)
 
         elif key_type == 'FQDN' and val_type == 'MX':
-            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
+            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k,
+                                               'val_type', val_type, 'value', val,
+                                               file=sys.stderr)
             priority = val.split()[0]
             exchange = val.split()[1][:-1]
             if w.count_fqdns_by_fqdn(exchange) == 0:
-                w.add_fqdn(exchange)
+                w.add_fqdn(exchange, uuid_child)
 
         elif key_type == 'SPF1' and val_type == "INCLUDE":
-            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
+            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k,
+                                               'val_type', val_type, 'value', val,
+                                               file=sys.stderr)
             if w.count_fqdns_by_fqdn(val) == 0:
-                w.add_fqdn(val)
+                w.add_fqdn(val, uuid_child)
 
         elif val_type == 'TXT':
-            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
+            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k,
+                                               'val_type', val_type, 'value', val,
+                                               file=sys.stderr)
             clean_value = re.sub(r'^"|"$', '', str(val))
 
             # TXT record is already stored, see what's in the TXT and that is
@@ -584,7 +547,9 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
                                 last_key_is_fqdn)
 
         elif val_type == 'SPF1':
-            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 'val_type', val_type, 'value', val, file=sys.stderr)
+            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k,
+                                               'val_type', val_type, 'value', val,
+                                               file=sys.stderr)
             for elem in val.split():
                 print(elem, file=sys.stderr)
 
@@ -757,7 +722,7 @@ def analyse_asn(ip):
 
 
 
-def resolve_r_type(uuid_parent, fqdn, r_type, s_dt):
+def resolve_r_type(uuid_parent, fqdn, r_type):
     if w.count_dns_rr_by_fqdn_and_r_type(fqdn, r_type) > 0:
         # The FQDN and Resource Type has been processed, no need to resolve it again.
         print("FQDN + Resource Type already resolved, skipping", fqdn, r_type, file=sys.stderr)
@@ -784,33 +749,28 @@ def resolve_r_type(uuid_parent, fqdn, r_type, s_dt):
             analyse_record2(uuid_child, uuid_parent, fqdn, "FQDN", str(r_data), r_type, "RESOLVED", "", q_dt, "")
 
     except dns.resolver.NXDOMAIN:
-        # Ignore the NXDOMAINs
+        print("Resolver error: NXDOMAIN.", 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
         pass
     except dns.exception.Timeout:
-        print("Domainhunter: Time out reached", file=sys.stderr)
-        uuid_child = str(uuid.uuid4())
-    except dns.resolver.NoAnswer as e:
-        uuid_child = str(uuid.uuid4())
-    except dns.resolver.NoMetaqueries:
-        uuid_child = str(uuid.uuid4())
+        print("Resolver error: Time out reached.", 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
     except EOFError:
-        print("Domainhunter: EOFError", file=sys.stderr)
-    except Exception as inst:
-        print("Domainhunter: Unknown type of error is", type(inst), inst, 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
+        print("Resolver error: EOF Error.", 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
+    except Exception as e:
+        print("Resolver error:", e, 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
 
 
-def resolve_multi_type(uuid_parent, fqdn, s_dt):
+def resolve_multi_type(uuid_parent, fqdn):
     # types = ['A', 'AAAA', 'CAA', 'RRSIG', 'CNAME', 'MX', 'TXT', 'PTR', 'NS', 'NAPTR', 'SOA', 'SRV', 'SSHFP', 'TLSA', 'ANY']
     types = ['A', 'AAAA', 'CAA', 'RRSIG', 'CNAME', 'MX', 'TXT', 'PTR', 'NS', 'NAPTR', 'SOA', 'SRV', 'SSHFP', 'TLSA']
     for t in types:
-        resolve_r_type(uuid_parent, fqdn, t, s_dt)
+        resolve_r_type(uuid_parent, fqdn, t)
 
 
 def worker():
     while True:
         uuid_parent, fqdn, s_dt = q.get()
         print ("Worker:", uuid_parent, fqdn, file=sys.stderr)
-        resolve_multi_type(uuid_parent, fqdn, s_dt)
+        resolve_multi_type(uuid_parent, fqdn)
         q.task_done()
 
 def add_ct_fqdn(uuid_hunt, base_fqdn, s_dt):
@@ -825,7 +785,7 @@ def add_ct_fqdn(uuid_hunt, base_fqdn, s_dt):
     return results
 
 
-def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
+def resolve_multi_sub_domains(): 
     # Start concurrent worker threads
     if threaded:
         num_worker_threads = 50
@@ -835,18 +795,17 @@ def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
              t.start()
 
     # Add the base
-    #workload.append(base_fqdn)
-    w.add_fqdn(base_fqdn)
+    w.add_fqdn(w.base_fqdn, w.uuid_hunt)
 
     # Add static list
     temp = open(PATH + 'research.list','r').read().splitlines()
     for prefix in temp:
-        w.add_fqdn(prefix + '.' + base_fqdn)
+        w.add_fqdn(prefix + '.' + w.base_fqdn, w.uuid_hunt)
 
     # Use certificate transparency
-    ct_res = add_ct_fqdn(uuid_hunt, base_fqdn, s_dt)
+    ct_res = add_ct_fqdn(w.uuid_hunt, w.base_fqdn, w.s_dt)
     for f in ct_res:
-        w.add_fqdn(f)
+        w.add_fqdn(f, w.uuid_hunt)
 
     print("Count todo", w.count_fqdns_by_status("todo"), file=sys.stderr)
     print("Count done", w.count_fqdns_by_status("done"), file=sys.stderr)
@@ -859,14 +818,14 @@ def resolve_multi_sub_domains(uuid_hunt, base_fqdn, s_dt):
             print("Count done", w.count_fqdns_by_status("done"), file=sys.stderr)
             break
 
-        for fqdn in l:
-            print("FQDN to examine (workload)", fqdn, file=sys.stderr)
+        for fqdn_rec in l:
+            print("FQDN to examine (workload)", fqdn_rec['fqdn'], file=sys.stderr)
             #print(fqdn, file=sys.stderr)
             if threaded:
-                q.put((uuid_hunt, fqdn, s_dt))
+                q.put((fqdn_rec['uuid_parent'], fqdn_rec['fqdn'], s_dt))
             else:
-                resolve_multi_type(uuid_hunt, fqdn, s_dt)
-                w.update_fqdns_status_by_fqdn(fqdn, "done")
+                resolve_multi_type(fqdn_rec['uuid_parent'], fqdn_rec['fqdn'])
+                w.update_fqdns_status_by_fqdn(fqdn_rec['fqdn'], "done")
 
         if threaded:
             q.join()       # block until all tasks are done
@@ -889,7 +848,7 @@ if threaded:
 parser = argparse.ArgumentParser("domainhunter2.py")
 parser.add_argument("--inject-uuid", help="UUID to inject as the primary key to this particular hunt.", type=str)
 parser.add_argument('--debug', default=False, action="store_true", help="Print debug output")
-parser.add_argument('--output', default=False, action="store_true", help="Draw output to this file")
+parser.add_argument('--output', default=False, help="Draw output to this file", type=str)
 parser.add_argument('domain', help="This domain will be hunted", type=str)
 args = parser.parse_args()
 
@@ -899,15 +858,21 @@ if not args.inject_uuid:
 else:
     w = Workload(args.domain, args.inject_uuid)
 
-print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", str(w.s_dt), file=sys.stdout)
+# Announce
+if args.output:
+    print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", str(w.s_dt), "output will be written to", args.output, file=sys.stdout)
+else:
+    print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", str(w.s_dt), file=sys.stdout)
 
 # Start the hunt
-resolve_multi_sub_domains(w.uuid_hunt, w.base_fqdn, w.s_dt)
+resolve_multi_sub_domains()
 
 # Draw
-if not args.output:
+if args.output:
+    print("Draw mode: plotting to", args.output, file=sys.stdout)
     w.draw(args.output)
 
+# End
 ##### MAIN #####
 
 
