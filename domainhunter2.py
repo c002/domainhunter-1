@@ -23,20 +23,23 @@ from pygraphviz import *
 ### Classes
 
 class Workload:
+    store_db = {}
     mem_db = {}
 
     def __init__(self, base_fqdn, uuid_hunt=None):
         self.base_fqdn = base_fqdn
+        self.wildcard_canary = 'wildcardcanary' + '.' + self.base_fqdn
 
-        self.initialize()
+        self.initialize_db()
         self.s_dt = datetime.utcnow()
         if uuid_hunt is None:
             self.uuid_hunt = str(uuid.uuid4())
         else:
             self.uuid_hunt = uuid_hunt
 
-    def initialize(self):
+    def initialize_db(self):
         self.mem_db['connection'] = sqlite3.connect(':memory:')
+        # self.mem_db['connection'] = sqlite3.connect(PATH + 'db/domainhunter2.db')
         self.mem_db['cursor'] = self.mem_db['connection'].cursor()
         self.mem_db['connection'].execute('''CREATE TABLE fqdns (uuid_fqdn, fqdn TEXT, status TEXT, uuid_parent TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr (uuid_rr TEXT, fqdn TEXT, r_type TEXT, value TEXT)''')
@@ -48,6 +51,110 @@ class Workload:
         self.mem_db['connection'].execute('''CREATE TABLE ip2asn (uuid_ip TEXT, uuid_asn TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr_parent_child (uuid_parent TEXT, uuid_child TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr_to_ip (uuid_rr TEXT, uuid_ip TEXT)''')
+
+        self.store_db['connection'] = sqlite3.connect(PATH + 'db/domainhunter2.db')
+        self.store_db['cursor'] = self.store_db['connection'].cursor()
+        try:
+            self.store_db['connection'].execute('''CREATE TABLE dns_rr_cache (fqdn TEXT, r_type TEXT, value TEXT, error TEXT)''')
+        except:
+            pass
+
+    def add_cache_entry(self, fqdn, r_type, value, error):
+        sql = ' '.join(["INSERT INTO dns_rr_cache",
+                                    "(fqdn, r_type, value, error)"
+                             "VALUES (:fqdn, :r_type, :value, :error)"])
+        self.store_db['cursor'].execute(sql,
+                                        {"fqdn":fqdn,
+                                         "r_type":r_type,
+                                         "value":value,
+                                         "error":error}) 
+        self.store_db['connection'].commit()
+        return True
+
+    def has_cache_hit(self, fqdn, r_type, error):
+        sql = ' '.join(["SELECT count(*)"
+                          "FROM dns_rr_cache",
+                         "WHERE fqdn = :fqdn",
+                           "AND r_type = :r_type",
+                           "AND error = :error"])
+        self.store_db['cursor'].execute(sql,
+                                        {"fqdn":fqdn,
+                                         "r_type":r_type,
+                                         "error":error})
+        cnt = self.store_db['cursor'].fetchone()[0]
+        return cnt > 0
+
+    def get_cache_hit(self, fqdn, r_type):
+        sql = ' '.join(["SELECT fqdn, r_type, value, error"
+                          "FROM dns_rr_cache",
+                         "WHERE fqdn = :fqdn",
+                           "AND r_type = :r_type"])
+        self.store_db['cursor'].execute(sql,
+                                        {"fqdn":fqdn,
+                                         "r_type":r_type})
+        res = self.store_db['cursor'].fetchone()
+
+        rec = {}
+        rec['fqdn'] = res[0]
+        rec['r_type'] = res[1]
+        rec['value'] = res[2]
+        rec['error'] = res[3]
+        return rec
+
+    def detect_none_base_fqdn_rr_wilds_for_cleanup(self):
+        all_recs = self.get_dns_rr()
+        base_fqdn_rr = self.get_dns_rr_by_fqdn(self.base_fqdn)
+
+        for ar in all_recs:
+            if ar['r_type'] in ['NS', 'MX', 'SOA', 'TXT']:
+                for bfr in base_fqdn_rr:
+                    if bfr['r_type'] == ar['r_type'] and bfr['value'] == ar['value']:
+                        print(bfr['r_type'], "==", ar['r_type'], "and", bfr['value'], "==", ar['value'])
+
+                        # Remove from all_recs (in the db)
+                        self.delete_dns_rr_by_fqdn_and_r_type(ar['fqdn'], ar['r_type'])
+
+    def detect_and_remove_dns_wildcard(self):
+        canary_recs = self.get_dns_rr_by_fqdn(self.wildcard_canary)
+        print("Canary rec count:", len(canary_recs), file=sys.stderr)
+        all_recs = self.get_dns_rr()
+        print("All rec count:", len(all_recs), file=sys.stderr)
+
+        # Is the data of the canary_recs is found in the all_recs, than
+        # remove that record from the all_recs, unless it's the base_fqdn and the wildcard_canary itself
+        for ar in all_recs:
+            for cr in canary_recs:
+                if ar['value'] == cr['value'] and ar['r_type'] == cr['r_type']:
+                    # Eligable for removal
+                    if ar['fqdn'] == self.base_fqdn or ar['fqdn'] == self.wildcard_canary:
+                        continue
+                    else:
+                        # Remove from all_recs (in the db)
+                        self.delete_dns_rr_by_fqdn_and_r_type(ar['fqdn'], ar['r_type'])
+
+    def delete_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
+        # Remove linkages
+        all_recs = self.get_dns_rr()
+        for r in all_recs:
+            if r['fqdn'] == g_fqdn and r['r_type'] == g_r_type:
+                self.delete_dns_rr_to_ip_by_uuid_rr(r['uuid_rr'])
+
+        # Remove DNS RR
+        sql = ' '.join(["DELETE FROM dns_rr",
+                              "WHERE fqdn = :fqdn",
+                                "AND r_type = :r_type"])
+        self.mem_db['cursor'].execute(sql,
+                                     {"fqdn":g_fqdn,
+                                      "r_type":g_r_type})
+        return True
+
+    def delete_dns_rr_to_ip_by_uuid_rr(self, g_uuid_rr):
+        sql = ' '.join(["DELETE FROM dns_rr_to_ip",
+                              "WHERE uuid_rr = :uuid_rr"])
+        self.mem_db['cursor'].execute(sql,
+                                     {"uuid_rr":g_uuid_rr})
+        return True
+
 
     def add_dns_rr_to_ip(self, uuid_rr, uuid_ip):
         sql = ' '.join(["INSERT INTO dns_rr_to_ip",
@@ -91,6 +198,17 @@ class Workload:
                                        "status": "todo",
                                        "uuid_parent": uuid_parent})
         return u
+
+    def count_dns_rr_by_r_type_and_value(self, c_r_type, c_value):
+        sql = ' '.join(["SELECT count(*)"
+                          "FROM dns_rr",
+                         "WHERE r_type = :r_type",
+                           "AND value = :value"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"r_type":c_r_type,
+                                       "value":c_value})
+        cnt = self.mem_db['cursor'].fetchone()[0]
+        return cnt
 
     def add_dns_rr(self, fqdn, r_type, value):
         u = str(uuid.uuid4())
@@ -192,6 +310,22 @@ class Workload:
         self.mem_db['cursor'].execute(sql,
                                       {"uuid_ip":uuid_ip, "uuid_asn":uuid_asn})
         return True
+
+    def get_dns_rr_by_fqdn(self, g_fqdn):
+        all_dns_rr = []
+        sql = ' '.join(["SELECT uuid_rr, fqdn, r_type, value",
+                          "FROM dns_rr",
+                         "WHERE fqdn = :fqdn"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"fqdn":g_fqdn})
+        for (uuid_rr, fqdn, r_type, value) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_rr'] = uuid_rr
+            rec['fqdn'] = fqdn
+            rec['r_type'] = r_type
+            rec['value'] = value
+            all_dns_rr.append(rec)
+        return all_dns_rr
 
     def get_dns_rr(self):
         all_dns_rr = []
@@ -340,139 +474,6 @@ class Workload:
 
 ### Functions
 
-def open_db():
-    db_o = {}
-    try:
-        db_o['connection'] = sqlite3.connect(PATH + 'db/domainhunter2.db')
-        db_o['cursor'] = db_o['connection'].cursor()
-    except:
-        sys.exit(1)
-
-    return db_o
-
-def create_db():
-    try:
-        db_o = open_db()
-
-        # Create the tables
-        db_o['connection'].execute('''CREATE TABLE domainhunts (uuid_hunt TEXT, fqdn TEXT, s_dt DATETIME)''')
-        db_o['connection'].execute('''CREATE TABLE dns (uuid_dns TEXT, uuid_parent TEXT, fqdn TEXT, r_type TEXT, res TEXT)''')
-        db_o['connection'].execute('''CREATE TABLE asn (uuid_asn TEXT, uuid_parent TEXT,
-                                                        asn TEXT,
-                                                        asn_description TEXT,
-                                                        asn_date TEXT,
-                                                        asn_registry TEXT,
-                                                        asn_country_code TEXT,
-                                                        asn_cidr TEXT
-                                                        )''')
-        db_o['connection'].execute('''CREATE TABLE dns_to_asn (uuid_hunt TEXT, uuid_dns TEXT, uuid_asn TEXT)''')
-
-        # Commit !
-        db_o['connection'].commit()
-    except Exception as inst:
-        print("store_main_domain:", "Unknown type of error is:", type(inst), inst, file=sys.stderr)
-
-
-def store_dns_to_asn(uuid_hunt, uuid_dns, uuid_asn):
-    print("store_dns_to_asn", uuid_hunt, uuid_dns, uuid_asn, file=sys.stderr)
-
-    try:
-        db_o = open_db()
-        db_o['cursor'].execute("INSERT INTO " +
-                               "    dns_to_asn (uuid_hunt, uuid_dns, uuid_asn) " +
-                               "         VALUES (       ?,        ?,        ?)",
-                              (uuid_hunt, uuid_dns, uuid_asn,))
-        db_o['connection'].commit()
-        db_o['connection'].close()
-    except Exception as inst:
-        print("store_dns_to_asn:", "Unknown type of error is:", type(inst), inst, file=sys.stderr)
-
-
-def store_hunt_domain(uuid_hunt, fqdn, s_dt):
-    print("store_hunt_domain", uuid_hunt, fqdn, file=sys.stderr)
-
-    try:
-        db_o = open_db()
-        db_o['cursor'].execute("INSERT INTO " +
-                               "    domainhunts (uuid_hunt, fqdn, s_dt) " +
-                               "         VALUES (        ?,    ?,    ?)",
-                               (uuid_hunt,
-                                fqdn,
-                                s_dt.strftime('%Y-%m-%d %H:%M:%S'),))
-        db_o['connection'].commit()
-        db_o['connection'].close()
-    except Exception as inst:
-        print("store_hunt_domain:", "Unknown type of error is:", type(inst), inst, file=sys.stderr)
-
-
-def store_dns(uuid_child, uuid_parent, fqdn, r_type, res):
-    print("store_dns", uuid_child, uuid_parent, fqdn, r_type, res, file=sys.stderr)
-
-    try:
-        db_o = open_db()
-        db_o['cursor'].execute("INSERT INTO " +
-                               "            dns (uuid_dns, uuid_parent, fqdn, r_type, res) " +
-                               "     VALUES (            ?,           ?,    ?,      ?,  ?)",
-                               (uuid_child,
-                                uuid_parent,
-                                fqdn,
-                                r_type,
-                                res,))
-        db_o['connection'].commit()
-        db_o['connection'].close()
-    except Exception as inst:
-        print("store_dns:", "Unknown type of error is:", type(inst), inst, file=sys.stderr)
-
-def store_asn(uuid_child, uuid_parent, asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr):
-    print("store_asn", uuid_child, uuid_parent, asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr, file=sys.stderr)
-    try:
-        db_o = open_db()
-        db_o['cursor'].execute("INSERT INTO " +
-                               "            asn (uuid_asn,      uuid_parent,              asn, asn_description, " +
-                               "                 asn_date,     asn_registry, asn_country_code,        asn_cidr) " +
-                               "     VALUES (           ?,                ?,                ?,               ?,  " +
-                               "                        ?,                ?,                ?,               ?)",
-                               (uuid_child,
-                                uuid_parent,
-                                asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr,))
-        db_o['connection'].commit()
-        db_o['connection'].close()
-    except Exception as inst:
-        print("store_asn:", "Unknown type of error is:", type(inst), inst, file=sys.stderr)
-
-
-def fetch_asn_uuid(asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr):
-    db_o = open_db()
-    uuid_asn = None
-
-    print("fetch_asn_uuid", asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr, file=sys.stderr)
-    try:
-        db_o['cursor'].execute("SELECT uuid_asn, uuid_parent, asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr " +
-                               "  FROM asn " +
-                               " WHERE asn = ? " +
-                               "   AND asn_description = ? " +
-                               "   AND asn_date = ? " +
-                               "   AND asn_registry = ? " +
-                               "   AND asn_country_code = ? " +
-                               "   AND asn_cidr = ?",
-                               (asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr,))
-
-    except Exception as inst:
-        print("fetch_asn_uuid", "Unknown type of error is:", type(inst), inst, file=sys.stderr)
-
-    try:
-        # Create a new subgraph, make rank is same => A.add_subgraph(sameNodeHeight, rank="same")
-        for (uuid_asn, uuid_parent, asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr) in db_o['cursor']:
-            print ("fetch_asn_uuid", uuid_asn, uuid_parent, asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr, file=sys.stderr)
-
-    except Exception as inst:
-        print("fetch_asn_uuid", "Unknown type of error is:", type(inst), inst, file=sys.stderr)
-
-
-    db_o['connection'].close()
-    return uuid_asn
-
-
 def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status, reason, dt, last_key_is_fqdn):
     try:
         # Remember where we came from. Required for SPF1 and DMARC
@@ -508,9 +509,21 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
             print ("analyse_record2", "debug", 'key_type', key_type, 'key', k,
                                                'val_type', val_type, 'value', val,
                                                file=sys.stderr)
+            # Clean result
             d = str(val)[:-1]
+
+            # Add to main resolve if it was never on the list.
             if w.count_fqdns_by_fqdn(val) == 0:
                 w.add_fqdn(val, uuid_child)
+
+            # Add link to existing FQDNs
+            # First search for other records with this FQDN. Link with this, CNAME is the parent
+                                    #parent, child
+            res = w.get_dns_rr_by_fqdn(d)
+            for rr in res:
+                print("CNAME link to DNS RR", rr['r_type'], rr['fqdn'], file=sys.stderr)
+                w.add_dns_rr_parent_child(uuid_child, rr['uuid_rr'])
+
 
         elif key_type == 'FQDN' and val_type == 'MX':
             print ("analyse_record2", "debug", 'key_type', key_type, 'key', k,
@@ -687,16 +700,6 @@ def analyse_asn(ip):
     print (results, file=sys.stderr)
     return results
 
-    s = str(results)
-    s = s.replace('\',', '\n')
-    s = s.replace('{', '')
-    s = s.replace('}', '')
-    s = s.replace('\'', '')
-
-    q_dt = datetime.utcnow()
-    r_dt = datetime.utcnow()
-    #store_record(uuid_child, uuid_parent, ip, 'ASN', s, s_dt, q_dt, r_dt)
-    # {'asn_description': 'NIKHEF FOM-Nikhef, NL', 'asn_cidr': '192.16.199.0/24', 'asn_registry': 'ripencc', 'asn': '1104', 'asn_country_code': 'NL', 'asn_date': '1986-11-07'}
     # {'asn': '15169', 'asn_date': '2008-09-30', 'asn_description': 'GOOGLE - Google LLC, US', 'asn_cidr': '2404:6800:4003::/48', 'asn_registry': 'apnic', 'asn_country_code': 'AU'}
     # {'asn': '15169', 'asn_date': '2007-03-13', 'asn_description': 'GOOGLE - Google LLC, US', 'asn_cidr': '74.125.200.0/24', 'asn_registry': 'arin', 'asn_country_code': 'US'}
 
@@ -721,13 +724,18 @@ def analyse_asn(ip):
 #        #store_record(uuid_child, uuid_parent, fqdn, r_type, str(r_data), s_dt, q_dt, r_dt)
 
 
-
 def resolve_r_type(uuid_parent, fqdn, r_type):
+    if w.has_cache_hit(fqdn, r_type, "NXDOMAIN"):
+        print("Negative cache hit", fqdn, r_type, "NXDOMAIN", file=sys.stderr)
+        return
+    if w.has_cache_hit(fqdn, r_type, "SERVFAIL"):
+        print("Negative cache hit", fqdn, r_type, "SERVFAIL", file=sys.stderr)
+        return
+
     if w.count_dns_rr_by_fqdn_and_r_type(fqdn, r_type) > 0:
         # The FQDN and Resource Type has been processed, no need to resolve it again.
         print("FQDN + Resource Type already resolved, skipping", fqdn, r_type, file=sys.stderr)
         return
-
 
     ### DNS Resolve FQDN with resource type
     answers = None
@@ -741,6 +749,16 @@ def resolve_r_type(uuid_parent, fqdn, r_type):
         answers = resolver.query(fqdn, r_type)
 
         for r_data in answers:
+            # Cache
+            w.add_cache_entry(fqdn, r_type, str(r_data), "SUCCESS")
+
+            # Do I already have this result elsewhere?
+            # TODO: Idea ... instead of skipping, link this to the most significant DNS RR.
+            cnt = w.count_dns_rr_by_r_type_and_value(r_type, str(r_data))
+            if cnt > 0 and r_type in ['MX', 'SOA', 'TXT']:
+                # Skip the recording
+                continue
+
             # Adding a DNS RR generates a new UUID, then link the parent to this.
             uuid_child = w.add_dns_rr(fqdn, r_type, str(r_data))
             w.add_dns_rr_parent_child(uuid_parent, uuid_child)
@@ -749,31 +767,41 @@ def resolve_r_type(uuid_parent, fqdn, r_type):
             analyse_record2(uuid_child, uuid_parent, fqdn, "FQDN", str(r_data), r_type, "RESOLVED", "", q_dt, "")
 
     except dns.resolver.NXDOMAIN:
-        print("Resolver error: NXDOMAIN.", 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
+        print("Resolver warning: NXDOMAIN.", 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
+
+        # Cache
+        w.add_cache_entry(fqdn, r_type, "", "NXDOMAIN")
+        pass
+    except dns.resolver.NoAnswer:
+        print("Resolver warning: SERVFAIL.", 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
+
+        # Cache
+        w.add_cache_entry(fqdn, r_type, "", "SERVFAIL")
         pass
     except dns.exception.Timeout:
         print("Resolver error: Time out reached.", 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
+
+        # Cache
+        w.add_cache_entry(fqdn, r_type, "", "TIMEOUT")
     except EOFError:
         print("Resolver error: EOF Error.", 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
+
     except Exception as e:
         print("Resolver error:", e, 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
 
 
 def resolve_multi_type(uuid_parent, fqdn):
-    # types = ['A', 'AAAA', 'CAA', 'RRSIG', 'CNAME', 'MX', 'TXT', 'PTR', 'NS', 'NAPTR', 'SOA', 'SRV', 'SSHFP', 'TLSA', 'ANY']
-    types = ['A', 'AAAA', 'CAA', 'RRSIG', 'CNAME', 'MX', 'TXT', 'PTR', 'NS', 'NAPTR', 'SOA', 'SRV', 'SSHFP', 'TLSA']
+    # Type options: A, AAAA, CAA, RRSIG, CNAME, MX, TXT,
+    #               PTR, NS, NAPTR, SOA, SRV, SSHFP, TLSA, ANY
+
+    # The rest
+    types = ['CNAME', 'A', 'AAAA', 'CAA', 'RRSIG', 'MX', 'TXT',
+             'PTR', 'NS', 'NAPTR', 'SOA', 'SRV', 'SSHFP', 'TLSA']
     for t in types:
         resolve_r_type(uuid_parent, fqdn, t)
 
 
-def worker():
-    while True:
-        uuid_parent, fqdn, s_dt = q.get()
-        print ("Worker:", uuid_parent, fqdn, file=sys.stderr)
-        resolve_multi_type(uuid_parent, fqdn)
-        q.task_done()
-
-def add_ct_fqdn(uuid_hunt, base_fqdn, s_dt):
+def add_ct_fqdn(base_fqdn, scopecreep):
     results = []
     html = urlopen("https://certspotter.com/api/v0/certs?expired=false&duplicate=false&domain=" + base_fqdn)
     s = html.read()
@@ -781,21 +809,20 @@ def add_ct_fqdn(uuid_hunt, base_fqdn, s_dt):
 
     for ct_cert in res:
         for fqdn in ct_cert['dns_names']:
+            if not scopecreep and not fqdn.endswith("." + base_fqdn):
+                # Skip, because we are avoiding scope creep
+                continue
+
             results.append(fqdn)
     return results
 
 
-def resolve_multi_sub_domains(): 
-    # Start concurrent worker threads
-    if threaded:
-        num_worker_threads = 50
-        for i in range(num_worker_threads):
-             t = threading.Thread(target=worker)
-             t.daemon = True
-             t.start()
-
+def resolve_multi_sub_domains(scopecreep): 
     # Add the base
     w.add_fqdn(w.base_fqdn, w.uuid_hunt)
+
+    # Add the wildcard canary
+    w.add_fqdn(w.wildcard_canary, w.uuid_hunt)
 
     # Add static list
     temp = open(PATH + 'research.list','r').read().splitlines()
@@ -803,7 +830,7 @@ def resolve_multi_sub_domains():
         w.add_fqdn(prefix + '.' + w.base_fqdn, w.uuid_hunt)
 
     # Use certificate transparency
-    ct_res = add_ct_fqdn(w.uuid_hunt, w.base_fqdn, w.s_dt)
+    ct_res = add_ct_fqdn(w.base_fqdn, scopecreep)
     for f in ct_res:
         w.add_fqdn(f, w.uuid_hunt)
 
@@ -820,18 +847,15 @@ def resolve_multi_sub_domains():
 
         for fqdn_rec in l:
             print("FQDN to examine (workload)", fqdn_rec['fqdn'], file=sys.stderr)
-            #print(fqdn, file=sys.stderr)
-            if threaded:
-                q.put((fqdn_rec['uuid_parent'], fqdn_rec['fqdn'], s_dt))
-            else:
-                resolve_multi_type(fqdn_rec['uuid_parent'], fqdn_rec['fqdn'])
-                w.update_fqdns_status_by_fqdn(fqdn_rec['fqdn'], "done")
-
-        if threaded:
-            q.join()       # block until all tasks are done
+            resolve_multi_type(fqdn_rec['uuid_parent'], fqdn_rec['fqdn'])
+            w.update_fqdns_status_by_fqdn(fqdn_rec['fqdn'], "done")
 
         print("Count todo", w.count_fqdns_by_status("todo"), file=sys.stderr)
         print("Count done", w.count_fqdns_by_status("done"), file=sys.stderr)
+
+    # Post processing
+#    w.detect_and_remove_dns_wildcard()
+#    w.detect_none_base_fqdn_rr_wilds_for_cleanup()
 
 
 ##### MAIN #####
@@ -839,15 +863,12 @@ import argparse
 
 # Init
 PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
-warnings.filterwarnings('ignore')
-threaded = False
-if threaded:
-    q = JoinableQueue()
 
 # Parser
 parser = argparse.ArgumentParser("domainhunter2.py")
 parser.add_argument("--inject-uuid", help="UUID to inject as the primary key to this particular hunt.", type=str)
 parser.add_argument('--debug', default=False, action="store_true", help="Print debug output")
+parser.add_argument('--scopecreep', default=False, action="store_true", help="The certificate transparency can add other related domains. Add flag to enable scope creep")
 parser.add_argument('--output', default=False, help="Draw output to this file", type=str)
 parser.add_argument('domain', help="This domain will be hunted", type=str)
 args = parser.parse_args()
@@ -865,7 +886,7 @@ else:
     print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", str(w.s_dt), file=sys.stdout)
 
 # Start the hunt
-resolve_multi_sub_domains()
+resolve_multi_sub_domains(args.scopecreep)
 
 # Draw
 if args.output:
@@ -882,3 +903,20 @@ if args.output:
 #store_hunt_domain(w.uuid_hunt, w.base_fqdn, w.s_dt)
 
 
+#if threaded:
+#    q = JoinableQueue()
+
+#    # Start concurrent worker threads
+#    if threaded:
+#        num_worker_threads = 50
+#        for i in range(num_worker_threads):
+#             t = threading.Thread(target=worker)
+#             t.daemon = True
+#             t.start()
+#
+#def worker():
+#    while True:
+#        uuid_parent, fqdn, s_dt = q.get()
+#        print ("Worker:", uuid_parent, fqdn, file=sys.stderr)
+#        resolve_multi_type(uuid_parent, fqdn)
+#        q.task_done()

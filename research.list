@@ -85,7 +85,6 @@ testing
 voip
 vpn
 wiki
-dns_wildcard_detected_when_resolved
 www
 www2
 _443._tcp
