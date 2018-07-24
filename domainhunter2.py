@@ -773,27 +773,25 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
                 elif val_type == 'AAAA':
                     uuid_ip = w.add_ip(val, 6)
 
-                    # The new IP needs an ASN resolve and IP to ASN attachment
-                    # Take A or AAAA value to resolve as part of an AS plus AS info
-                    asn_result = analyse_asn(val)
+                # The new IP needs an ASN resolve and IP to ASN attachment
+                # Take A or AAAA value to resolve as part of an AS plus AS info
+                asn_result = analyse_asn(val)
 
-                    # The IP is now resolved to an ASN. Did we have this one from another ASN?
-                    # If yes, get that one, if not, create a new one.
-                    # Result is an uuid_asn
-                    if w.count_asn_by_asn_and_asn_cidr(asn_result['asn'],
-                                                       asn_result['asn_cidr']) == 0:
-                        uuid_asn = w.add_asn(asn_result['asn'], asn_result['asn_description'],
-                                             asn_result['asn_date'], asn_result['asn_registry'],
-                                             asn_result['asn_country_code'], asn_result['asn_cidr'])
-                    else:
-                        rec_asn = w.get_asn_by_asn_and_asn_cidr(asn_result['asn'],
-                                                                asn_result['asn_cidr'])
-                        uuid_asn = rec_asn['uuid_asn']
+                # The IP is now resolved to an ASN. Did we have this one from another ASN?
+                # If yes, get that one, if not, create a new one.
+                # Result is an uuid_asn
+                if w.count_asn_by_asn_and_asn_cidr(asn_result['asn'],
+                                                   asn_result['asn_cidr']) == 0:
+                    uuid_asn = w.add_asn(asn_result['asn'], asn_result['asn_description'],
+                                         asn_result['asn_date'], asn_result['asn_registry'],
+                                         asn_result['asn_country_code'], asn_result['asn_cidr'])
+                else:
+                    rec_asn = w.get_asn_by_asn_and_asn_cidr(asn_result['asn'],
+                                                            asn_result['asn_cidr'])
+                    uuid_asn = rec_asn['uuid_asn']
 
-                    # Combine this IP address with an the ASN per CIDR
-                    w.add_ip2asn(uuid_ip, uuid_asn)
-
-                    # TODO: ASN registration to AS number for linkage across CIDRs
+                # Combine this IP address with an the ASN per CIDR
+                w.add_ip2asn(uuid_ip, uuid_asn)
             else:
                 rec_ip = w.get_ip_by_ip(val)
                 uuid_ip = rec_ip['ip']
