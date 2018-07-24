@@ -543,8 +543,6 @@ class Workload:
             label = ' '.join(["ASN:", rec['asn'], "\n",
                              rec['asn_description'], "\n",
                              rec['asn_date'], "\n",
-                             rec['asn_registry'], "\n",
-                             rec['asn_country_code'], "\n",
                              rec['asn_cidr']
                              ])
             self.MainGraph.add_node(rec['uuid_asn'], style='filled',
@@ -557,6 +555,8 @@ class Workload:
                 m_asn['uuid_main_asn'] = str(uuid.uuid4())
                 m_asn['asn'] = rec['asn']
                 m_asn['asn_description'] = rec['asn_description']
+                m_asn['asn_registry'] = rec['asn_registry']
+                m_asn['asn_country_code'] = rec['asn_country_code']
                 main_asn.append(m_asn)
 
         # Attach the AS Number blobs (per CIDR) to the IP address
@@ -566,9 +566,19 @@ class Workload:
 
         # Bonus - stitch ASN record blobs per CIDR to eac other per ASN
         for ma in main_asn:
+            cidrs = []
+            for rec in all_asns:
+                if rec['asn'] == ma['asn']:
+                    cidrs.append(rec['asn_cidr'])
+
             label = ' '.join(["ASN:", ma['asn'], "\n",
-                              ma['asn_description']
+                              ma['asn_description'], "\n",
+                              ma['asn_registry'], "\n",
+                              ma['asn_country_code']
                              ])
+            for cidr in sorted(cidrs):
+                label = label + "\n" + cidr
+
             self.MainGraph.add_node(ma['uuid_main_asn'], style='filled',
                                                          color='lawngreen',
                                                          fontcolor='black',
