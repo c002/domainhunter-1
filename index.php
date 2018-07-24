@@ -26,8 +26,8 @@
         echo '<tr>';
 
         echo '<td>' . $row['fqdn'] . '</td>';
-        if (file_exists("results/".$row['uuid_hunt'].".html")) {
-        echo '<td>' . '<a href="results/'.$row['uuid_hunt'].'.html">'. "Results" .'</a>' . '</td>';
+        if (file_exists("results/".$row['uuid_hunt'].".svg")) {
+            echo '<td>' . '<a href="results/'.$row['uuid_hunt'].'.html">'. "Results" .'</a>' . '</td>';
         } else {
             echo '<td>' . $row['status'] . '</td>';
         }

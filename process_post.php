@@ -46,11 +46,20 @@
                            ));
         $GLOBALS['db']->commit();
 
+        /* Write sexy wrapper page */
+        $html = '<html><body>' . "\n" .
+                '<button onclick="window.location.href=\'/index.php\'">Return</button>'."\n" .
+                '<br>'."\n" .
+                '<style>'.
+                '.fit { width: 400%; }'.
+                '</style>'.
+                '<embed src="https://'.$_SERVER['SERVER_NAME'].'/results/' . $uuid . $extention . '" type="image/svg+xml"></embed>' .
+                '</body></html>'."\n";
+
+                /* '<img class="fit" src="/temp/' . $uuid . $extention . ">'. "\n" . */
+        file_put_contents("results/" . $uuid . ".html", $html);
+
         /* Input is clean, start processing */
-//        print ("Start processing... ");
-//        print ($domain);
-//        print ("<br>");
-        /* $cmd = $DOMAINHUNTER_PY . " " . $domain . " 2>/dev/null"; */
         $cmd = $DOMAINHUNTER_PY;
         if ($scopecreep == "scopecreep") {
             $cmd = $cmd . " --scopecreep";
@@ -83,22 +92,11 @@
             print("results/" . $uuid . $extention);
             if (file_exists("results/" . $uuid . $extention)) {
                 /* Redirect to end result */
-                $html = '<html><body>' . "\n" .
-                        '<button onclick="window.location.href=\'/index.php\'">Return</button>'."\n" .
-                        '<br>'."\n" .
-                        '<style>'.
-                        '.fit { width: 400%; }'.
-                        '</style>'.
-                        '<embed src="https://'.$_SERVER['SERVER_NAME'].'/results/' . $uuid . $extention . '" type="image/svg+xml"></embed>' .
-                        '</body></html>'."\n";
-
-                        /* '<img class="fit" src="/temp/' . $uuid . $extention . ">'. "\n" . */
-                file_put_contents("results/" . $uuid . ".html", $html);
 
                 /* header("refresh:1;url=temp/" . $uuid . $extention); */
                 header("refresh:1;url=results/" . $uuid . ".html");
             } else {
-                print("Processing...\n");
+                print("<br>\nProcessing...\n");
                 header("refresh:5;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid);
             }
             return;
