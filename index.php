@@ -1,6 +1,8 @@
 <?php
     require_once 'globals.php';
 
+    header("refresh:60;url=index.html");
+
     echo '<html>';
     echo '   <body>';
     echo '      <form action = "/process_post.php" method = "POST">';
