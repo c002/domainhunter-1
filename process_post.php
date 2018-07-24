@@ -9,7 +9,7 @@
 
 
     #$DOMAINHUNTER_PY="./daemon_wrapper.sh python3 ./domainhunter2.py";
-    $DOMAINHUNTER_PY="screen ./domainhunter2.py";
+    $DOMAINHUNTER_PY="PATH=usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ./domainhunter2.py";
     $PROCESS_POST_PHP="process_post.php";
 
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
