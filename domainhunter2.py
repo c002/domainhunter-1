@@ -360,6 +360,26 @@ class Workload:
         cnt = self.mem_db['cursor'].fetchone()[0]
         return cnt
 
+    def get_asns(self):
+        asns = []
+        sql = ' '.join(["SELECT uuid_asn, asn, asn_description,",
+                               "asn_date, asn_registry, asn_country_code,",
+                               "asn_cidr",
+                          "FROM asn"])
+        self.mem_db['cursor'].execute(sql)
+        for (uuid_asn, asn, asn_description, asn_date, 
+             asn_registry, asn_country_code, asn_cidr) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_asn'] = uuid_asn
+            rec['asn'] = asn
+            rec['asn_description'] = asn_description
+            rec['asn_date'] = asn_date
+            rec['asn_registry'] = asn_registry
+            rec['asn_country_code'] = asn_country_code
+            rec['asn_cidr'] = asn_cidr
+            asns.append(rec)
+        return asns
+
     def get_asn_by_asn_and_asn_cidr(self, c_asn, c_asn_cidr):
         sql = ' '.join(["SELECT uuid_asn, asn, asn_description,",
                                "asn_date, asn_registry, asn_country_code,",
@@ -414,6 +434,19 @@ class Workload:
             # Only get the first, yes, indenting matters
             return rec
 
+    def get_ips(self):
+        all_ips = []
+        sql = ' '.join(["SELECT uuid_ip, ip, version",
+                          "FROM ip"])
+        self.mem_db['cursor'].execute(sql)
+        for (uuid_ip, ip, version) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_ip'] = uuid_ip
+            rec['ip'] = ip
+            rec['version'] = version
+            all_ips.append(rec)
+        return all_ips
+
     ### Table: ip2asn
     def add_ip2asn(self, uuid_ip, uuid_asn):
         sql = ' '.join(["INSERT INTO ip2asn (uuid_ip, uuid_asn)",
@@ -421,6 +454,18 @@ class Workload:
         self.mem_db['cursor'].execute(sql,
                                       {"uuid_ip":uuid_ip, "uuid_asn":uuid_asn})
         return True
+
+    def get_ip2asns(self):
+        all_ip2asns = []
+        sql = ' '.join(["SELECT uuid_ip, uuid_asn",
+                          "FROM ip2asn"])
+        self.mem_db['cursor'].execute(sql)
+        for (uuid_ip, uuid_asn) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_ip'] = uuid_ip
+            rec['uuid_asn'] = uuid_asn
+            all_ip2asns.append(rec)
+        return all_ip2asns
 
     def plot(self):
         self.MainGraph.add_node(self.uuid_hunt, style='filled', color='blue', fontcolor='white', 
@@ -469,6 +514,70 @@ class Workload:
         for rec in all_dns_rr_parent_child:
             # Link up node
             self.MainGraph.add_edge(rec['uuid_parent'], rec['uuid_child'])
+
+        # Plot all IP addresses
+        all_ips = self.get_ips()
+        for rec in all_ips:
+            # Plot all the nodes
+            if rec['version'] == "6":
+                self.MainGraph.add_node(rec['uuid_ip'], style='filled',
+                                                        color='hotpink',
+                                                        fontcolor='black', 
+                                        label=rec['ip'] + "\n" + "version: " + rec['version'])
+            elif rec['version'] == "4":
+                self.MainGraph.add_node(rec['uuid_ip'], style='filled',
+                                                        color='lightpink1',
+                                                        fontcolor='black', 
+                                        label=rec['ip'] + "\n" + "version: " + rec['version'])
+
+        # Attach the IP addresses to the DNS RR records with these values
+        for rec_rr in all_dns_rr:
+            for rec_ip in all_ips:
+                if rec_rr['value'] == rec_ip['ip']:
+                    self.MainGraph.add_edge(rec_rr['uuid_rr'], rec_ip['uuid_ip'])
+
+        # Plot AS Number info
+        main_asn = []
+        all_asns = self.get_asns()
+        for rec in all_asns:
+            label = ' '.join(["ASN:", rec['asn'], "\n",
+                             rec['asn_description'], "\n",
+                             rec['asn_date'], "\n",
+                             rec['asn_registry'], "\n",
+                             rec['asn_country_code'], "\n",
+                             rec['asn_cidr']
+                             ])
+            self.MainGraph.add_node(rec['uuid_asn'], style='filled',
+                                                     color='forestgreen',
+                                                     fontcolor='white',
+                                                     label=label)
+            # Check if exists first, if not - add
+            if not any(d.get('asn', None) == rec['asn'] for d in main_asn):
+                m_asn = {}
+                m_asn['uuid_main_asn'] = str(uuid.uuid4())
+                m_asn['asn'] = rec['asn']
+                m_asn['asn_description'] = rec['asn_description']
+                main_asn.append(m_asn)
+
+        # Attach the AS Number blobs (per CIDR) to the IP address
+        all_ip2asns = self.get_ip2asns()
+        for rec in all_ip2asns:
+            self.MainGraph.add_edge(rec['uuid_ip'], rec['uuid_asn'])
+
+        # Bonus - stitch ASN record blobs per CIDR to eac other per ASN
+        for ma in main_asn:
+            label = ' '.join(["ASN:", ma['asn'], "\n",
+                              ma['asn_description']
+                             ])
+            self.MainGraph.add_node(ma['uuid_main_asn'], style='filled',
+                                                         color='lawngreen',
+                                                         fontcolor='black',
+                                                         label=label)
+        # Consolidate the ASN numbers by their number
+        for rec in all_asns:
+            for ma in main_asn:
+                if rec['asn'] == ma['asn']:
+                    self.MainGraph.add_edge(rec['uuid_asn'], ma['uuid_main_asn'])
 
 
     def draw(self, destination):
@@ -873,7 +982,6 @@ def resolve_multi_sub_domains(scopecreep):
 
         for fqdn_rec in l:
             print("FQDN to examine (workload)", fqdn_rec['fqdn'], file=sys.stderr)
-            
             resolve_multi_type(fqdn_rec['uuid_parent'], fqdn_rec['fqdn'])
             w.update_fqdns_status_by_fqdn(fqdn_rec['fqdn'], "done")
 
