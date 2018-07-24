@@ -17,23 +17,23 @@
     }
 
 
-    $products = array();
-    $sql = '   SELECT fqdn, uuid_hunt '.
-           '     FROM domainhunts'.
-           ' ORDER BY s_dt';
-    $rs = $db->handle->query($sql);
+    $sql = '   SELECT fqdn, uuid_hunt, status'.
+           '     FROM domainhunts';
+    $rs = $GLOBALS['db']->query($sql);
 
     echo '<table border=1>';
     foreach($rs as $row) {
         echo '<tr>';
 
         echo '<td>' . $row['fqdn'] . '</td>';
-        echo '<td>' . '<a href="/temp/'.$row['uuid_hunt'].'.html">' . $row['s_dt'] . '</a>' . '</td>';
+        if (file_exists("results/".$row['uuid_hunt'].".html")) {
+        echo '<td>' . '<a href="results/'.$row['uuid_hunt'].'.html">'. "Results" .'</a>' . '</td>';
+        } else {
+            echo '<td>' . $row['status'] . '</td>';
+        }
 
         echo '</tr>';
     }
-    return $products;
-
     echo '</table>';
 
     echo '   </body>';

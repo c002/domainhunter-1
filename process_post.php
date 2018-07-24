@@ -89,7 +89,7 @@
                         '<style>'.
                         '.fit { width: 400%; }'.
                         '</style>'.
-                        '<embed src="results/' . $uuid . $extention . '" type="image/svg+xml"></embed>' .
+                        '<embed src="https://'.$_SERVER['SERVER_NAME'].'/results/' . $uuid . $extention . '" type="image/svg+xml"></embed>' .
                         '</body></html>'."\n";
 
                         /* '<img class="fit" src="/temp/' . $uuid . $extention . ">'. "\n" . */
