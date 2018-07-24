@@ -71,7 +71,7 @@ class Workload:
                                         {"fqdn":fqdn,
                                          "r_type":r_type,
                                          "value":value,
-                                         "error":error}) 
+                                         "error":error})
         return True
 
     def has_cache_hit(self, fqdn, r_type, error):
@@ -251,7 +251,7 @@ class Workload:
         self.mem_db['cursor'].execute(sql)
         for (uuid_parent, uuid_child) in self.mem_db['cursor']:
             rec = {}
-            rec['uuid_parent'] = uuid_parent 
+            rec['uuid_parent'] = uuid_parent
             rec['uuid_child'] = uuid_child
             dns_rr_parent_child.append(rec)
         return dns_rr_parent_child
@@ -307,7 +307,7 @@ class Workload:
         sql = ' '.join(["UPDATE fqdns",
                            "SET status = :status",
                          "WHERE fqdn = :fqdn"])
-        self.mem_db['cursor'].execute(sql, 
+        self.mem_db['cursor'].execute(sql,
                                       {"fqdn": u_fqdn,
                                        "status": u_status})
         return True
@@ -367,7 +367,7 @@ class Workload:
                                "asn_cidr",
                           "FROM asn"])
         self.mem_db['cursor'].execute(sql)
-        for (uuid_asn, asn, asn_description, asn_date, 
+        for (uuid_asn, asn, asn_description, asn_date,
              asn_registry, asn_country_code, asn_cidr) in self.mem_db['cursor']:
             rec = {}
             rec['uuid_asn'] = uuid_asn
@@ -389,7 +389,7 @@ class Workload:
                            "AND asn_cidr = :asn_cidr"])
         self.mem_db['cursor'].execute(sql,
                                       {"asn":c_asn, "asn_cidr":c_asn_cidr})
-        for (uuid_asn, asn, asn_description, asn_date, 
+        for (uuid_asn, asn, asn_description, asn_date,
              asn_registry, asn_country_code, asn_cidr) in self.mem_db['cursor']:
             rec = {}
             rec['uuid_asn'] = uuid_asn
@@ -468,7 +468,7 @@ class Workload:
         return all_ip2asns
 
     def plot(self):
-        self.MainGraph.add_node(self.uuid_hunt, style='filled', color='blue', fontcolor='white', 
+        self.MainGraph.add_node(self.uuid_hunt, style='filled', color='blue', fontcolor='white',
                                            label="Main search domain is:\n" + self.base_fqdn)
 
         # Plot the FQDN with RR results and tie that to the main node
@@ -504,9 +504,9 @@ class Workload:
                 fontcolor = 'black'
 
             # Plot all the nodes
-            self.MainGraph.add_node(rec['uuid_rr'], style='filled', 
-                                                    color=color, 
-                                                    fontcolor=fontcolor, 
+            self.MainGraph.add_node(rec['uuid_rr'], style='filled',
+                                                    color=color,
+                                                    fontcolor=fontcolor,
                                     label=rec['fqdn'] + "\n" + rec['r_type'] + "\n" + rec['value'])
 
         # Plot the DNS RR Type linkages
@@ -522,12 +522,12 @@ class Workload:
             if rec['version'] == "6":
                 self.MainGraph.add_node(rec['uuid_ip'], style='filled',
                                                         color='hotpink',
-                                                        fontcolor='black', 
+                                                        fontcolor='black',
                                         label=rec['ip'] + "\n" + "version: " + rec['version'])
             elif rec['version'] == "4":
                 self.MainGraph.add_node(rec['uuid_ip'], style='filled',
                                                         color='lightpink1',
-                                                        fontcolor='black', 
+                                                        fontcolor='black',
                                         label=rec['ip'] + "\n" + "version: " + rec['version'])
 
         # Attach the IP addresses to the DNS RR records with these values
@@ -771,12 +771,12 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
         ### Error handling CIDR notation -
         ### elif val_type == 'A' or val_type == 'AAAA' or val_type == "IPV4_CIDR" or val_type == "IPV6_CIDR":
         elif val_type == 'A' or val_type == 'AAAA':
-            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k, 
+            print ("analyse_record2", "debug", 'key_type', key_type, 'key', k,
                    'val_type', val_type, 'value', val, file=sys.stderr)
 
             # Currenct RR is uuid_child, which has an A result.
             # This is stored already. Need to add the IP
-            # and bind the IP uuid to the RR uuid, which is the child_uuid 
+            # and bind the IP uuid to the RR uuid, which is the child_uuid
             if w.count_ip_by_ip(val) == 0:
                 if val_type == 'A':
                     uuid_ip = w.add_ip(val, 4)
@@ -960,7 +960,7 @@ def add_ct_fqdn(base_fqdn, scopecreep):
     return results
 
 
-def resolve_multi_sub_domains(scopecreep): 
+def resolve_multi_sub_domains(scopecreep):
     # Add the base
     w.add_fqdn(w.base_fqdn, w.uuid_hunt)
 
@@ -1033,7 +1033,7 @@ resolve_multi_sub_domains(args.scopecreep)
 
 # Draw
 if args.output:
-    print("Draw mode: plotting to", args.output, file=sys.stdout)
+    print("Draw mode: plotting to", args.output, file=sys.stderr)
     w.draw(args.output)
 
 # End
