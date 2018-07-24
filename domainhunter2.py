@@ -39,6 +39,7 @@ class Workload:
 
     def initialize_db(self):
         self.mem_db['connection'] = sqlite3.connect(':memory:')
+        self.mem_db['connection'].isolation_level = None
         # self.mem_db['connection'] = sqlite3.connect(PATH + 'db/domainhunter2.db')
         self.mem_db['cursor'] = self.mem_db['connection'].cursor()
         self.mem_db['connection'].execute('''CREATE TABLE fqdns (uuid_fqdn, fqdn TEXT, status TEXT, uuid_parent TEXT)''')
@@ -53,12 +54,15 @@ class Workload:
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr_to_ip (uuid_rr TEXT, uuid_ip TEXT)''')
 
         self.store_db['connection'] = sqlite3.connect(PATH + 'db/domainhunter2.db')
+        self.store_db['connection'].isolation_level = None
         self.store_db['cursor'] = self.store_db['connection'].cursor()
         try:
             self.store_db['connection'].execute('''CREATE TABLE dns_rr_cache (fqdn TEXT, r_type TEXT, value TEXT, error TEXT)''')
         except:
             pass
 
+    ### Disk cache of dns_rr records for speed up
+    ### TODO: should get a (longer) TTL
     def add_cache_entry(self, fqdn, r_type, value, error):
         sql = ' '.join(["INSERT INTO dns_rr_cache",
                                     "(fqdn, r_type, value, error)"
@@ -68,7 +72,6 @@ class Workload:
                                          "r_type":r_type,
                                          "value":value,
                                          "error":error}) 
-        self.store_db['connection'].commit()
         return True
 
     def has_cache_hit(self, fqdn, r_type, error):
@@ -101,6 +104,7 @@ class Workload:
         rec['error'] = res[3]
         return rec
 
+    ### Clean up stuff, milage may vary...
     def detect_none_base_fqdn_rr_wilds_for_cleanup(self):
         all_recs = self.get_dns_rr()
         base_fqdn_rr = self.get_dns_rr_by_fqdn(self.base_fqdn)
@@ -132,6 +136,7 @@ class Workload:
                         # Remove from all_recs (in the db)
                         self.delete_dns_rr_by_fqdn_and_r_type(ar['fqdn'], ar['r_type'])
 
+    ### Table: dns_rr
     def delete_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
         # Remove linkages
         all_recs = self.get_dns_rr()
@@ -147,57 +152,6 @@ class Workload:
                                      {"fqdn":g_fqdn,
                                       "r_type":g_r_type})
         return True
-
-    def delete_dns_rr_to_ip_by_uuid_rr(self, g_uuid_rr):
-        sql = ' '.join(["DELETE FROM dns_rr_to_ip",
-                              "WHERE uuid_rr = :uuid_rr"])
-        self.mem_db['cursor'].execute(sql,
-                                     {"uuid_rr":g_uuid_rr})
-        return True
-
-
-    def add_dns_rr_to_ip(self, uuid_rr, uuid_ip):
-        sql = ' '.join(["INSERT INTO dns_rr_to_ip",
-                                    "(uuid_rr, uuid_ip)"
-                             "VALUES (:uuid_rr, :uuid_ip)"])
-        self.mem_db['cursor'].execute(sql,
-                                     {"uuid_rr":uuid_rr,
-                                      "uuid_ip":uuid_ip})
-        return True
-
-    def add_dns_rr_parent_child(self, uuid_parent, uuid_child):
-        sql = ' '.join(["INSERT INTO dns_rr_parent_child",
-                                    "(uuid_parent, uuid_child)",
-                             "VALUES (:uuid_parent, :uuid_child)"])
-        self.mem_db['cursor'].execute(sql,
-                                     {"uuid_parent":uuid_parent,
-                                      "uuid_child":uuid_child})
-        return True
-
-    def get_dns_rr_parent_child(self):
-        dns_rr_parent_child = []
-        sql = ' '.join(["SELECT uuid_parent, uuid_child",
-                          "FROM dns_rr_parent_child"])
-        self.mem_db['cursor'].execute(sql)
-        for (uuid_parent, uuid_child) in self.mem_db['cursor']:
-            rec = {}
-            rec['uuid_parent'] = uuid_parent 
-            rec['uuid_child'] = uuid_child
-            dns_rr_parent_child.append(rec)
-        return dns_rr_parent_child
-
-    def add_fqdn(self, fqdn, uuid_parent):
-        # Status: "todo", "processing", "done"
-        u = str(uuid.uuid4())
-        sql = ' '.join(["INSERT INTO fqdns",
-                                    "(uuid_fqdn, fqdn, status, uuid_parent)",
-                             "VALUES (:uuid_fqdn, :fqdn, :status, :uuid_parent)"])
-        self.mem_db['cursor'].execute(sql,
-                                      {"uuid_fqdn":u,
-                                       "fqdn": fqdn,
-                                       "status": "todo",
-                                       "uuid_parent": uuid_parent})
-        return u
 
     def count_dns_rr_by_r_type_and_value(self, c_r_type, c_value):
         sql = ' '.join(["SELECT count(*)"
@@ -222,6 +176,161 @@ class Workload:
                                        "value": value})
         return u
 
+    def get_dns_rr_by_fqdn(self, g_fqdn):
+        all_dns_rr = []
+        sql = ' '.join(["SELECT uuid_rr, fqdn, r_type, value",
+                          "FROM dns_rr",
+                         "WHERE fqdn = :fqdn"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"fqdn":g_fqdn})
+        for (uuid_rr, fqdn, r_type, value) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_rr'] = uuid_rr
+            rec['fqdn'] = fqdn
+            rec['r_type'] = r_type
+            rec['value'] = value
+            all_dns_rr.append(rec)
+        return all_dns_rr
+
+    def get_dns_rr(self):
+        all_dns_rr = []
+        sql = ' '.join(["SELECT uuid_rr, fqdn, r_type, value",
+                          "FROM dns_rr"])
+        self.mem_db['cursor'].execute(sql)
+        for (uuid_rr, fqdn, r_type, value) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_rr'] = uuid_rr
+            rec['fqdn'] = fqdn
+            rec['r_type'] = r_type
+            rec['value'] = value
+            all_dns_rr.append(rec)
+        return all_dns_rr
+
+    def count_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
+        sql = ' '.join(["SELECT count(*)",
+                          "FROM dns_rr",
+                         "WHERE fqdn = :fqdn",
+                           "AND r_type = :r_type"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"fqdn":g_fqdn, "r_type":g_r_type})
+        cnt = self.mem_db['cursor'].fetchone()[0]
+        return cnt
+
+    ### Table: dns_rr_to_ip
+    def delete_dns_rr_to_ip_by_uuid_rr(self, g_uuid_rr):
+        sql = ' '.join(["DELETE FROM dns_rr_to_ip",
+                              "WHERE uuid_rr = :uuid_rr"])
+        self.mem_db['cursor'].execute(sql,
+                                     {"uuid_rr":g_uuid_rr})
+        return True
+
+
+    def add_dns_rr_to_ip(self, uuid_rr, uuid_ip):
+        sql = ' '.join(["INSERT INTO dns_rr_to_ip",
+                                    "(uuid_rr, uuid_ip)"
+                             "VALUES (:uuid_rr, :uuid_ip)"])
+        self.mem_db['cursor'].execute(sql,
+                                     {"uuid_rr":uuid_rr,
+                                      "uuid_ip":uuid_ip})
+        return True
+
+    ### Table: dns_rr_parent_child
+    def add_dns_rr_parent_child(self, uuid_parent, uuid_child):
+        sql = ' '.join(["INSERT INTO dns_rr_parent_child",
+                                    "(uuid_parent, uuid_child)",
+                             "VALUES (:uuid_parent, :uuid_child)"])
+        self.mem_db['cursor'].execute(sql,
+                                     {"uuid_parent":uuid_parent,
+                                      "uuid_child":uuid_child})
+        return True
+
+    def get_dns_rr_parent_child(self):
+        dns_rr_parent_child = []
+        sql = ' '.join(["SELECT uuid_parent, uuid_child",
+                          "FROM dns_rr_parent_child"])
+        self.mem_db['cursor'].execute(sql)
+        for (uuid_parent, uuid_child) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_parent'] = uuid_parent 
+            rec['uuid_child'] = uuid_child
+            dns_rr_parent_child.append(rec)
+        return dns_rr_parent_child
+
+    ### Table: fqdns
+    def add_fqdn(self, fqdn, uuid_parent):
+        # Status: "todo", "processing", "done"
+        u = str(uuid.uuid4())
+        sql = ' '.join(["INSERT INTO fqdns",
+                                    "(uuid_fqdn, fqdn, status, uuid_parent)",
+                             "VALUES (:uuid_fqdn, :fqdn, :status, :uuid_parent)"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"uuid_fqdn":u,
+                                       "fqdn": fqdn,
+                                       "status": "todo",
+                                       "uuid_parent": uuid_parent})
+        return u
+
+    def get_fqdns_not_done(self):
+        records = []
+        sql = ' '.join(["SELECT uuid_fqdn, fqdn, status, uuid_parent",
+                          "FROM fqdns",
+                         "WHERE status <> :status"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"status":"done"})
+        for (uuid_fqdn, fqdn, status, uuid_parent) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid'] = uuid_fqdn
+            rec['fqdn'] = fqdn
+            rec['status'] = status
+            rec['uuid_parent'] = uuid_parent
+            records.append(rec)
+        return records
+
+    def get_fqdns_by_fqdn(self, g_fqdn):
+        records = []
+        sql = ' '.join(["SELECT uuid_fqdn, fqdn, status, uuid_parent",
+                          "FROM fqdns",
+                         "WHERE fqdn = :fqdn"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"fqdn":g_fqdn})
+        for (uuid_fqdn, fqdn, status, uuid_parent) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid'] = uuid_fqdn
+            rec['fqdn'] = fqdn
+            rec['status'] = status
+            rec['uuid_parent'] = uuid_parent
+            records.append(rec)
+        return records
+
+    def update_fqdns_status_by_fqdn(self, u_fqdn, u_status):
+        records = []
+        sql = ' '.join(["UPDATE fqdns",
+                           "SET status = :status",
+                         "WHERE fqdn = :fqdn"])
+        self.mem_db['cursor'].execute(sql, 
+                                      {"fqdn": u_fqdn,
+                                       "status": u_status})
+        return True
+
+    def count_fqdns_by_fqdn(self, c_fqdn):
+        sql = ' '.join(["SELECT count(*)",
+                          "FROM fqdns",
+                         "WHERE fqdn = :fqdn"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"fqdn":c_fqdn})
+        cnt = self.mem_db['cursor'].fetchone()[0]
+        return cnt
+
+    def count_fqdns_by_status(self, c_status):
+        sql = ' '.join(["SELECT count(status)",
+                          "FROM fqdns",
+                         "WHERE status = :status"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"status":c_status})
+        cnt = self.mem_db['cursor'].fetchone()[0]
+        return cnt
+
+    ### Table: asn
     def add_asn(self, asn, asn_description, asn_date, asn_registry, asn_country_code, asn_cidr):
         u = str(uuid.uuid4())
         sql = ' '.join(["INSERT INTO asn",
@@ -273,6 +382,7 @@ class Workload:
             # Only get the first, yes, indenting matters
             return rec
 
+    ### Table: ip
     def add_ip(self, ip, version):
         u = str(uuid.uuid4())
         sql = ' '.join(["INSERT INTO ip (uuid_ip, ip, version)",
@@ -304,112 +414,13 @@ class Workload:
             # Only get the first, yes, indenting matters
             return rec
 
+    ### Table: ip2asn
     def add_ip2asn(self, uuid_ip, uuid_asn):
         sql = ' '.join(["INSERT INTO ip2asn (uuid_ip, uuid_asn)",
                                     "VALUES (:uuid_ip, :uuid_asn)"])
         self.mem_db['cursor'].execute(sql,
                                       {"uuid_ip":uuid_ip, "uuid_asn":uuid_asn})
         return True
-
-    def get_dns_rr_by_fqdn(self, g_fqdn):
-        all_dns_rr = []
-        sql = ' '.join(["SELECT uuid_rr, fqdn, r_type, value",
-                          "FROM dns_rr",
-                         "WHERE fqdn = :fqdn"])
-        self.mem_db['cursor'].execute(sql,
-                                      {"fqdn":g_fqdn})
-        for (uuid_rr, fqdn, r_type, value) in self.mem_db['cursor']:
-            rec = {}
-            rec['uuid_rr'] = uuid_rr
-            rec['fqdn'] = fqdn
-            rec['r_type'] = r_type
-            rec['value'] = value
-            all_dns_rr.append(rec)
-        return all_dns_rr
-
-    def get_dns_rr(self):
-        all_dns_rr = []
-        sql = ' '.join(["SELECT uuid_rr, fqdn, r_type, value",
-                          "FROM dns_rr"])
-        self.mem_db['cursor'].execute(sql)
-        for (uuid_rr, fqdn, r_type, value) in self.mem_db['cursor']:
-            rec = {}
-            rec['uuid_rr'] = uuid_rr
-            rec['fqdn'] = fqdn
-            rec['r_type'] = r_type
-            rec['value'] = value
-            all_dns_rr.append(rec)
-        return all_dns_rr
-
-    def count_dns_rr_by_fqdn_and_r_type(self, g_fqdn, g_r_type):
-        sql = ' '.join(["SELECT count(*)",
-                          "FROM dns_rr",
-                         "WHERE fqdn = :fqdn",
-                           "AND r_type = :r_type"])
-        self.mem_db['cursor'].execute(sql,
-                                      {"fqdn":g_fqdn, "r_type":g_r_type})
-        cnt = self.mem_db['cursor'].fetchone()[0]
-        return cnt
-
-    def get_fqdns_not_done(self):
-        records = []
-        sql = ' '.join(["SELECT uuid_fqdn, fqdn, status, uuid_parent",
-                          "FROM fqdns",
-                         "WHERE status <> :status"])
-        self.mem_db['cursor'].execute(sql,
-                                      {"status":"done"})
-        for (uuid_fqdn, fqdn, status, uuid_parent) in self.mem_db['cursor']:
-            rec = {}
-            rec['uuid'] = uuid_fqdn
-            rec['fqdn'] = fqdn
-            rec['status'] = status
-            rec['uuid_parent'] = uuid_parent
-            records.append(rec)
-        return records
-
-    def get_fqdns_by_fqdn(self, g_fqdn):
-        records = []
-        sql = ' '.join(["SELECT uuid_fqdn, fqdn, status, uuid_parent",
-                          "FROM fqdns",
-                         "WHERE fqdn = :fqdn"])
-        self.mem_db['cursor'].execute(sql,
-                                      {"fqdn":g_fqdn})
-        for (uuid_fqdn, fqdn, status, uuid_parent) in self.mem_db['cursor']:
-            rec = {}
-            rec['uuid'] = uuid_fqdn
-            rec['fqdn'] = fqdn
-            rec['status'] = status
-            rec['uuid_parent'] = uuid_parent
-            records.append(rec)
-        return records
-
-    def update_fqdns_status_by_fqdn(self, u_fqdn, u_status):
-        records = []
-        sql = ' '.join(["UPDATE fqdns",
-                           "SET status = :status",
-                         "WHERE fqdn = :fqdn"])
-        self.mem_db['cursor'].execute(sql, 
-                                      {"fqdn": u_fqdn,
-                                       "status": u_status})
-        return True
-
-    def count_fqdns_by_fqdn(self, c_fqdn):
-        sql = ' '.join(["SELECT count(fqdn)",
-                          "FROM fqdns",
-                         "WHERE fqdn = :fqdn"])
-        self.mem_db['cursor'].execute(sql,
-                                      {"fqdn":c_fqdn})
-        cnt = self.mem_db['cursor'].fetchone()[0]
-        return cnt
-
-    def count_fqdns_by_status(self, c_status):
-        sql = ' '.join(["SELECT count(status)",
-                          "FROM fqdns",
-                         "WHERE status = :status"])
-        self.mem_db['cursor'].execute(sql,
-                                      {"status":c_status})
-        cnt = self.mem_db['cursor'].fetchone()[0]
-        return cnt
 
     def plot(self):
         self.MainGraph.add_node(self.uuid_hunt, style='filled', color='blue', fontcolor='white', 
@@ -509,17 +520,19 @@ def analyse_record2(uuid_child, uuid_parent, k, key_type, val, val_type, status,
             print ("analyse_record2", "debug", 'key_type', key_type, 'key', k,
                                                'val_type', val_type, 'value', val,
                                                file=sys.stderr)
-            # Clean result
-            d = str(val)[:-1]
+            # Clean up the result by ditching the dot
+            cleaned_up_val = str(val)[:-1]
 
             # Add to main resolve if it was never on the list.
-            if w.count_fqdns_by_fqdn(val) == 0:
-                w.add_fqdn(val, uuid_child)
+            if w.count_fqdns_by_fqdn(cleaned_up_val) == 0:
+                # Avoid endless loops - most often this is just True
+                if cleaned_up_val != k:
+                    w.add_fqdn(cleaned_up_val, uuid_child)
 
             # Add link to existing FQDNs
             # First search for other records with this FQDN. Link with this, CNAME is the parent
                                     #parent, child
-            res = w.get_dns_rr_by_fqdn(d)
+            res = w.get_dns_rr_by_fqdn(cleaned_up_val)
             for rr in res:
                 print("CNAME link to DNS RR", rr['r_type'], rr['fqdn'], file=sys.stderr)
                 w.add_dns_rr_parent_child(uuid_child, rr['uuid_rr'])
@@ -727,15 +740,15 @@ def analyse_asn(ip):
 def resolve_r_type(uuid_parent, fqdn, r_type):
     if w.has_cache_hit(fqdn, r_type, "NXDOMAIN"):
         print("Negative cache hit", fqdn, r_type, "NXDOMAIN", file=sys.stderr)
-        return
+        return False
     if w.has_cache_hit(fqdn, r_type, "SERVFAIL"):
         print("Negative cache hit", fqdn, r_type, "SERVFAIL", file=sys.stderr)
-        return
+        return False
 
     if w.count_dns_rr_by_fqdn_and_r_type(fqdn, r_type) > 0:
         # The FQDN and Resource Type has been processed, no need to resolve it again.
         print("FQDN + Resource Type already resolved, skipping", fqdn, r_type, file=sys.stderr)
-        return
+        return True
 
     ### DNS Resolve FQDN with resource type
     answers = None
@@ -766,6 +779,8 @@ def resolve_r_type(uuid_parent, fqdn, r_type):
             # Let's go deeper with this RR
             analyse_record2(uuid_child, uuid_parent, fqdn, "FQDN", str(r_data), r_type, "RESOLVED", "", q_dt, "")
 
+        return True
+
     except dns.resolver.NXDOMAIN:
         print("Resolver warning: NXDOMAIN.", 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
 
@@ -789,14 +804,25 @@ def resolve_r_type(uuid_parent, fqdn, r_type):
     except Exception as e:
         print("Resolver error:", e, 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
 
+    return False
 
 def resolve_multi_type(uuid_parent, fqdn):
     # Type options: A, AAAA, CAA, RRSIG, CNAME, MX, TXT,
     #               PTR, NS, NAPTR, SOA, SRV, SSHFP, TLSA, ANY
 
-    # The rest
-    types = ['CNAME', 'A', 'AAAA', 'CAA', 'RRSIG', 'MX', 'TXT',
-             'PTR', 'NS', 'NAPTR', 'SOA', 'SRV', 'SSHFP', 'TLSA']
+    # CNAME first
+    resolve_r_type(uuid_parent, fqdn, 'CNAME')
+
+    # Does this FQDN exist as CNAME ? yes, skip others completely : no, continue
+    if w.count_dns_rr_by_fqdn_and_r_type(fqdn, 'CNAME') > 0:
+        return
+
+    if fqdn == w.base_fqdn:
+        resolve_r_type(uuid_parent, fqdn, 'SOA')
+
+    # The rest, without CNAME, nor SOA
+    types = ['A', 'AAAA', 'CAA', 'RRSIG', 'MX', 'TXT',
+             'PTR', 'NS', 'NAPTR', 'SRV', 'SSHFP', 'TLSA']
     for t in types:
         resolve_r_type(uuid_parent, fqdn, t)
 
@@ -847,6 +873,7 @@ def resolve_multi_sub_domains(scopecreep):
 
         for fqdn_rec in l:
             print("FQDN to examine (workload)", fqdn_rec['fqdn'], file=sys.stderr)
+            
             resolve_multi_type(fqdn_rec['uuid_parent'], fqdn_rec['fqdn'])
             w.update_fqdns_status_by_fqdn(fqdn_rec['fqdn'], "done")
 
