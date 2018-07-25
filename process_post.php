@@ -61,24 +61,31 @@
                 /* '<img class="fit" src="/temp/' . $uuid . $extention . ">'. "\n" . */
         file_put_contents("results/" . $uuid . ".html", $html);
 
-        /* Input is clean, start processing */
-        $cmd = $DOMAINHUNTER_PY;
+        //open connection
+        curl_setopt($ch,CURLOPT_POST,count($fields));
+        curl_setopt($ch,CURLOPT_POSTFIELDS,$fields_string);
+
         if ($scopecreep == "scopecreep") {
-            $cmd = $cmd . " --scopecreep";
+            $data = array("uuid_hunt" => $uuid, "domain" => $domain, "scopecreep" => 1);
+        } else {
+            $data = array("uuid_hunt" => $uuid, "domain" => $domain);
         }
-        $cmd = $cmd ." --inject-uuid ".$uuid;
-        $cmd = $cmd ." --output results/".$uuid.".svg ".$domain." 2>/tmp/".$domain.".log";
+        $data_string = json_encode($data);
 
-        print ("Going for: ");
-        print ("<br>");
-        print ($cmd);
-        print ("<br>");
-        $output = system($cmd);
-        print($output);
-        print ("<br>");
+        $ch = curl_init("http://localhost:5000/domainhunter");
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+            'Content-Type: application/json',
+            'Content-Length: ' . strlen($data_string))
+        );
+        $result = curl_exec($ch);
+        print $result;
 
+        /* header("refresh:1;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid); */
+        header("refresh:1;url=index.html");
 
-        header("refresh:6;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid);
 
         return;
     }

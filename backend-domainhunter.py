@@ -8,41 +8,29 @@ from wsgiref import simple_server
 
 
 def domainhunter_start(j_args):
-    print('Launch domainhunter')
-    print(j_args)
+    # Data in j_args is already sanitized
 
-    if type(j_args) is dict:
-        print("yes, dict")
-    else:
-        print("no, dunno")
+    print('Launching domainhunter', j_args)
 
     my_cmd = []
-    #my_command.append("./domainhunter2.py")
-    my_cmd.append("/var/www/domainhunter.koeroo.net/domainhunter2.py")
+    my_cmd.append("./domainhunter2.py")
 
-    if j_args.get("scopecreep", False) is not False:
-        print (j_args.get("scopecreep"))
-        r = j_args.get("scopecreep")
-        if r == "yes":
-            my_cmd.append("--scopecreep")
-
-    uuid_hunt = j_args.get("uuid_hunt")
-    domain = j_args.get("domain")
+    if j_args.get("scopecreep") is not None:
+        my_cmd.append("--scopecreep")
 
     my_cmd.append("--inject-uuid")
-    my_cmd.append(uuid_hunt)
+    my_cmd.append(j_args.get("uuid_hunt"))
 
     my_cmd.append("--output")
-    my_cmd.append("results/" + uuid_hunt + ".svg")
-    my_cmd.append(domain)
+    my_cmd.append("results/" + j_args.get("uuid_hunt") + ".svg")
+    my_cmd.append(j_args.get("domain"))
 
-    print(my_cmd)
+    print("Executing domainhunter:", my_cmd)
 
     my_env = os.environ.copy()
     my_env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" + my_env["PATH"]
     os.chdir("/var/www/domainhunter.koeroo.net")
-    subprocess.Popen(my_cmd, env=my_env)
-
+    subprocess.Popen(my_cmd, env=my_env, stderr=subprocess.DEVNULL)
     os._exit(0)
 
 def daemonize(func_child, j_args):
@@ -71,7 +59,8 @@ class DomainHunterAPI:
 
     def on_get(self, req, res):
         res.status = falcon.HTTP_200
-        res.body = json.dumps({ '1': 'foo'})
+        res.body = "Domainhunter is Ready"
+
     def on_post(self, req, res):
         big_chunk = bytes()
         while True:
@@ -82,14 +71,24 @@ class DomainHunterAPI:
             big_chunk = big_chunk + chunk
 
         if len(big_chunk) == 0:
+            res.body = 'Error: no data provided'
             res.status = falcon.HTTP_400
             return
 
         # Decode UTF-8 bytes to Unicode, and convert single quotes
         # to double quotes to make it valid JSON
         my_json = big_chunk.decode('utf8').replace("'", '"')
-
         j = json.loads(my_json)
+
+        if j.get("uuid_hunt") is None:
+            res.body = 'Error: no uuid_hunt provided'
+            res.status = falcon.HTTP_400
+            return
+
+        if j.get("domain") is None:
+            res.body = 'Error: no domain provided'
+            res.status = falcon.HTTP_400
+            return
 
         daemonize(domainhunter_start, j)
         res.status = falcon.HTTP_200

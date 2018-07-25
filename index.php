@@ -1,10 +1,14 @@
 <?php
     require_once 'globals.php';
 
-    header("refresh:60;url=index.html");
+    header("refresh:10;url=index.html");
 
     echo '<html>';
     echo '   <body>';
+    echo '   This page will refresh every 10 seconds, type faster...';
+    echo '   <br>';
+    echo '   <br>';
+
     echo '      <form action = "/process_post.php" method = "POST">';
     echo '         Domain: <input type="text" name="domain" autocomplete="off"> <br>';
     echo '         Scope creep: <input type="checkbox" name="scopecreep" value="scopecreep"> <br>';
