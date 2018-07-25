@@ -960,12 +960,17 @@ def add_ct_fqdn(base_fqdn, scopecreep):
     return results
 
 
-def resolve_multi_sub_domains(scopecreep):
+def resolve_multi_sub_domains(scopecreep, sideload):
     # Add the base
     w.add_fqdn(w.base_fqdn, w.uuid_hunt)
 
     # Add the wildcard canary
     w.add_fqdn(w.wildcard_canary, w.uuid_hunt)
+
+    # Add side loaded list
+    if sideload is not None:
+        for f in sideload:
+            w.add_fqdn(f, w.uuid_hunt)
 
     # Add static list
     temp = open(PATH + 'research.list','r').read().splitlines()
@@ -1009,10 +1014,11 @@ PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
 
 # Parser
 parser = argparse.ArgumentParser("domainhunter2.py")
-parser.add_argument("--inject-uuid", help="UUID to inject as the primary key to this particular hunt.", type=str)
 parser.add_argument('--debug', default=False, action="store_true", help="Print debug output")
-parser.add_argument('--scopecreep', default=False, action="store_true", help="The certificate transparency can add other related domains. Add flag to enable scope creep")
+parser.add_argument("--inject-uuid", help="UUID to inject as the primary key to this particular hunt.", type=str)
+parser.add_argument("--load", help="Load additional FQDNs, each on a separate line to extend the hunt.", type=str)
 parser.add_argument('--output', default=False, help="Draw output to this file", type=str)
+parser.add_argument('--scopecreep', default=False, action="store_true", help="The certificate transparency can add other related domains. Add flag to enable scope creep")
 parser.add_argument('domain', help="This domain will be hunted", type=str)
 args = parser.parse_args()
 
@@ -1022,6 +1028,17 @@ if not args.inject_uuid:
 else:
     w = Workload(args.domain, args.inject_uuid)
 
+# Side load
+side_loaded = None
+if args.load:
+    if not os.path.isfile(args.load):
+        print("Error: file", args.load, "does not exist")
+        sys.exit(1)
+    print("Loading", args.load, file=sys.stderr)
+    side_loaded = open(args.load, 'r').read().splitlines()
+    print("Loading done, found", len(side_loaded), "lines of FQDN(s)", file=sys.stderr)
+
+
 # Announce
 if args.output:
     print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", str(w.s_dt), "output will be written to", args.output, file=sys.stdout)
@@ -1029,7 +1046,7 @@ else:
     print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", str(w.s_dt), file=sys.stdout)
 
 # Start the hunt
-resolve_multi_sub_domains(args.scopecreep)
+resolve_multi_sub_domains(args.scopecreep, side_loaded)
 
 # Draw
 if args.output:
@@ -1037,29 +1054,3 @@ if args.output:
     w.draw(args.output)
 
 # End
-##### MAIN #####
-
-
-## Generic storage of this try.
-## Create the database, incl tables
-#create_db()
-#store_hunt_domain(w.uuid_hunt, w.base_fqdn, w.s_dt)
-
-
-#if threaded:
-#    q = JoinableQueue()
-
-#    # Start concurrent worker threads
-#    if threaded:
-#        num_worker_threads = 50
-#        for i in range(num_worker_threads):
-#             t = threading.Thread(target=worker)
-#             t.daemon = True
-#             t.start()
-#
-#def worker():
-#    while True:
-#        uuid_parent, fqdn, s_dt = q.get()
-#        print ("Worker:", uuid_parent, fqdn, file=sys.stderr)
-#        resolve_multi_type(uuid_parent, fqdn)
-#        q.task_done()
