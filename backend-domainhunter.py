@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-import os
-import sys
+import subprocess, os, sys
 import time
 import json
 import falcon
@@ -11,7 +10,39 @@ from wsgiref import simple_server
 def domainhunter_start(j_args):
     print('Launch domainhunter')
     print(j_args)
-    time.sleep(20)
+
+    if type(j_args) is dict:
+        print("yes, dict")
+    else:
+        print("no, dunno")
+
+    my_cmd = []
+    #my_command.append("./domainhunter2.py")
+    my_cmd.append("/var/www/domainhunter.koeroo.net/domainhunter2.py")
+
+    if j_args.get("scopecreep", False) is not False:
+        print (j_args.get("scopecreep"))
+        r = j_args.get("scopecreep")
+        if r == "yes":
+            my_cmd.append("--scopecreep")
+
+    uuid_hunt = j_args.get("uuid_hunt")
+    domain = j_args.get("domain")
+
+    my_cmd.append("--inject-uuid")
+    my_cmd.append(uuid_hunt)
+
+    my_cmd.append("--output")
+    my_cmd.append("results/" + uuid_hunt + ".svg")
+    my_cmd.append(domain)
+
+    print(my_cmd)
+
+    my_env = os.environ.copy()
+    my_env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" + my_env["PATH"]
+    os.chdir("/var/www/domainhunter.koeroo.net")
+    subprocess.Popen(my_cmd, env=my_env)
+
     os._exit(0)
 
 def daemonize(func_child, j_args):
