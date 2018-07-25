@@ -3,7 +3,8 @@ This web-tool will use a list of domains and extract as much as possible from th
 
 ---
 
-./domainhunter2.py --help
+```
+# ./domainhunter2.py --help
 usage: domainhunter2.py [-h] [--debug] [--inject-uuid INJECT_UUID]
                         [--load LOAD] [--output OUTPUT] [--scopecreep]
                         domain
@@ -23,6 +24,7 @@ optional arguments:
   --scopecreep          The certificate transparency can add other related
                         domains. Add flag to enable scope creep
 
+```
 ---
 
 * Dependencies
