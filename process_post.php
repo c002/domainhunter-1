@@ -97,7 +97,8 @@
                 header("refresh:1;url=results/" . $uuid . ".html");
             } else {
                 print("<br>\nProcessing...\n");
-                header("refresh:5;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid);
+                /* header("refresh:5;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid); */
+                header("refresh:1;url=index.php");
             }
             return;
         }

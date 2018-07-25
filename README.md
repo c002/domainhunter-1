@@ -8,3 +8,4 @@ This web-tool will use a list of domains and extract as much as possible from th
 3. python3-pygraphviz
 4. pip3
 5. pip3 install --upgrade ipwhois
+6. pip3 install falcon
