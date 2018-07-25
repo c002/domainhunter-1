@@ -34,3 +34,8 @@ optional arguments:
 4. pip3
 5. pip3 install --upgrade ipwhois
 6. pip3 install falcon
+
+---
+Demo output of koeroo.net:
+
+![alt text](https://raw.githubusercontent.com/okoeroo/domainhunter/master/test.svg)
