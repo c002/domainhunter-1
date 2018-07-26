@@ -38,4 +38,5 @@ optional arguments:
 ---
 Demo output of koeroo.net:
 
-![alt text](https://raw.githubusercontent.com/okoeroo/domainhunter/master/demo.svg)
+![alt text](https://raw.githubusercontent.com/okoeroo/domainhunter/master/demo.svg?sanitize=true)
+
