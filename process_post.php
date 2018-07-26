@@ -18,7 +18,8 @@
         /* Start processing */
         $domain = trim($_POST["domain"]);
         if (array_key_exists("scopecreep", $_POST)) {
-            $scopecreep = trim($_POST["scopecreep"]);
+            // $scopecreep = trim($_POST["scopecreep"]);
+            $scopecreep = "yes";
         } else {
             $scopecreep = "no";
         }
@@ -34,8 +35,8 @@
         }
 
         /* Store domainhunt */
-        $sql = 'INSERT INTO domainhunts (uuid_hunt, fqdn, status)'.
-               '     VALUES (:uuid_hunt, :fqdn, :status)';
+        $sql = 'INSERT INTO domainhunts (uuid_hunt, fqdn, status, scopecreep, sideload)'.
+               '     VALUES (:uuid_hunt, :fqdn, :status, :scopecreep, :sideload)';
 
         $uuid = guidv4();
 
@@ -44,7 +45,9 @@
         $statement->execute(array(
                             "uuid_hunt" => $uuid,
                             "fqdn" => $domain,
-                            "status" => "processing"
+                            "status" => "processing",
+                            "scopecreep" => $scopecreep,
+                            "sideload" => "no"
                            ));
         $GLOBALS['db']->commit();
 
@@ -65,11 +68,7 @@
         curl_setopt($ch,CURLOPT_POST,count($fields));
         curl_setopt($ch,CURLOPT_POSTFIELDS,$fields_string);
 
-        if ($scopecreep == "scopecreep") {
-            $data = array("uuid_hunt" => $uuid, "domain" => $domain, "scopecreep" => 1);
-        } else {
-            $data = array("uuid_hunt" => $uuid, "domain" => $domain);
-        }
+        $data = array("uuid_hunt" => $uuid, "domain" => $domain, "scopecreep" => $scopecreep);
         $data_string = json_encode($data);
 
         $ch = curl_init("http://localhost:5000/domainhunter");

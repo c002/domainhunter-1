@@ -18,7 +18,7 @@
 
         try {
             $GLOBALS['db']->begintransaction();
-            $GLOBALS['db']->exec("CREATE TABLE IF NOT EXISTS domainhunts (uuid_hunt TEXT, fqdn TEXT, status TEXT)");
+            $GLOBALS['db']->exec("CREATE TABLE IF NOT EXISTS domainhunts (uuid_hunt TEXT, fqdn TEXT, status TEXT, scopecreep TEXT, sideload TEXT)");
             $GLOBALS['db']->commit();
         } catch (Exception $e) {
             print($e);

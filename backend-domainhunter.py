@@ -15,7 +15,7 @@ def domainhunter_start(j_args):
     my_cmd = []
     my_cmd.append("./domainhunter2.py")
 
-    if j_args.get("scopecreep") is not None:
+    if j_args.get("scopecreep") == "yes":
         my_cmd.append("--scopecreep")
 
     my_cmd.append("--inject-uuid")
