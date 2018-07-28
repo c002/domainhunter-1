@@ -10,6 +10,9 @@ echo "Domainhunt started for $DOMAIN at $UUID"
 
 echo "insert into domainhunts (uuid_hunt, fqdn, status) values (\"$UUID\", \"$DOMAIN\", \"processing\")" | sqlite3 db/domainhunter2.db
 ./domainhunter2.py --inject-uuid $UUID --output results/$UUID.svg $DOMAIN
+./create_html_result_page.py --schema https:// --fqdn domainhunter.koeroo.net --resultdir results/ --uuidhunt $UUID --resultext svg
+
+echo "Domainhunt finished for $DOMAIN at $UUID"
 
 
 exit 0

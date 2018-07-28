@@ -31,6 +31,28 @@ def domainhunter_start(j_args):
     my_env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" + my_env["PATH"]
     os.chdir("/var/www/domainhunter.koeroo.net")
     subprocess.Popen(my_cmd, env=my_env, stderr=subprocess.DEVNULL)
+
+    if j_args.get("wrapper") == "yes":
+        my_cmd = []
+        my_cmd.append("./create_html_result_page.py")
+        my_cmd.append("--schema")
+        my_cmd.append("https://")
+        my_cmd.append("--fqdn")
+        my_cmd.append("domainhunter.koeroo.net")
+        my_cmd.append("--resultdir")
+        my_cmd.append("results/")
+        my_cmd.append("--uuidhunt")
+        my_cmd.append(j_args.get("uuid_hunt"))
+        my_cmd.append("--resultext")
+        my_cmd.append("svg")
+
+        print("Executing wrapper html:", my_cmd)
+
+        my_env = os.environ.copy()
+        my_env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" + my_env["PATH"]
+        os.chdir("/var/www/domainhunter.koeroo.net")
+        subprocess.Popen(my_cmd, env=my_env)
+
     os._exit(0)
 
 def daemonize(func_child, j_args):

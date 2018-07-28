@@ -52,6 +52,7 @@
         $GLOBALS['db']->commit();
 
         /* Write sexy wrapper page */
+        /*
         $html = '<html><body>' . "\n" .
                 '<button onclick="window.location.href=\'/index.php\'">Return</button>'."\n" .
                 '<br>'."\n" .
@@ -60,15 +61,15 @@
                 '</style>'.
                 '<embed src="https://'.$_SERVER['SERVER_NAME'].'/results/' . $uuid . $extention . '" type="image/svg+xml"></embed>' .
                 '</body></html>'."\n";
-
+        */
                 /* '<img class="fit" src="/temp/' . $uuid . $extention . ">'. "\n" . */
-        file_put_contents("results/" . $uuid . ".html", $html);
+        //file_put_contents("results/" . $uuid . ".html", $html);
 
         //open connection
         curl_setopt($ch,CURLOPT_POST,count($fields));
         curl_setopt($ch,CURLOPT_POSTFIELDS,$fields_string);
 
-        $data = array("uuid_hunt" => $uuid, "domain" => $domain, "scopecreep" => $scopecreep);
+        $data = array("uuid_hunt" => $uuid, "domain" => $domain, "scopecreep" => $scopecreep, "wrapper" => "yes");
         $data_string = json_encode($data);
 
         $ch = curl_init("http://localhost:5000/domainhunter");

@@ -509,6 +509,15 @@ class Workload:
                                                     fontcolor=fontcolor,
                                     label=rec['fqdn'] + "\n" + rec['r_type'] + "\n" + rec['value'])
 
+
+        # HACK: re-plot the CNAME linkage to all RR types not yet linked
+        for rr in self.get_dns_rr():
+            if rr['r_type'] == 'CNAME':
+                for rr_inner in self.get_dns_rr():
+                    # Combine the CNAME value to whatever RR
+                    if rr['value'] == rr_inner['fqdn']:
+                        self.add_dns_rr_parent_child(rr['uuid_rr'], rr_inner['uuid_rr'])
+
         # Plot the DNS RR Type linkages
         all_dns_rr_parent_child = self.get_dns_rr_parent_child()
         for rec in all_dns_rr_parent_child:
@@ -588,7 +597,6 @@ class Workload:
             for ma in main_asn:
                 if rec['asn'] == ma['asn']:
                     self.MainGraph.add_edge(rec['uuid_asn'], ma['uuid_main_asn'])
-
 
     def draw(self, destination):
         # Init graphviz
@@ -1004,6 +1012,7 @@ def resolve_multi_sub_domains(scopecreep, sideload):
     # Post processing
 #    w.detect_and_remove_dns_wildcard()
 #    w.detect_none_base_fqdn_rr_wilds_for_cleanup()
+
 
 
 ##### MAIN #####
