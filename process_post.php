@@ -51,20 +51,6 @@
                            ));
         $GLOBALS['db']->commit();
 
-        /* Write sexy wrapper page */
-        /*
-        $html = '<html><body>' . "\n" .
-                '<button onclick="window.location.href=\'/index.php\'">Return</button>'."\n" .
-                '<br>'."\n" .
-                '<style>'.
-                '.fit { width: 400%; }'.
-                '</style>'.
-                '<embed src="https://'.$_SERVER['SERVER_NAME'].'/results/' . $uuid . $extention . '" type="image/svg+xml"></embed>' .
-                '</body></html>'."\n";
-        */
-                /* '<img class="fit" src="/temp/' . $uuid . $extention . ">'. "\n" . */
-        //file_put_contents("results/" . $uuid . ".html", $html);
-
         //open connection
         curl_setopt($ch,CURLOPT_POST,count($fields));
         curl_setopt($ch,CURLOPT_POSTFIELDS,$fields_string);
@@ -83,10 +69,7 @@
         $result = curl_exec($ch);
         print $result;
 
-        /* header("refresh:1;url=" . $PROCESS_POST_PHP . "?uuid=" . $uuid); */
         header("refresh:1;url=index.html");
-
-
         return;
     }
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {
