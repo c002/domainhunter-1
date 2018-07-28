@@ -1,15 +1,26 @@
+#!/bin/bash
+
 UUID=$(dbus-uuidgen)
 
-if [ -z $1 ]; then
-    echo "Provide a domain"
-    exit 1
-fi
-DOMAIN=$1
-if [ -n $2 && $2 = "--scopecreep" ]; then
-    SCOPECREEP="yes"
-else
-    SCOPECREEP="no"
-fi
+DOMAIN=""
+
+SCOPECREEP="no"
+for i in "$@"; do
+    case $i in
+        --scopecreep)
+            SCOPECREEP="yes"
+            shift
+            ;;
+        *)
+            if [ "$DOMAIN" = "" ]; then
+                DOMAIN=$1
+            else
+                echo "Input arguments error at: $@"
+                exit 1
+            fi
+            ;;
+    esac
+done
 
 echo "Domainhunt started for $DOMAIN at $UUID"
 
@@ -23,28 +34,3 @@ fi
 ./create_html_result_page.py -v --schema https:// --fqdn domainhunter.koeroo.net --resultdir results/ --uuidhunt $UUID --resultext svg
 
 echo "Domainhunt finished for $DOMAIN at $UUID"
-
-
-exit 0
-
-# ./domainhunter2.py -h
-usage: domainhunter2.py [-h] [--debug] [--inject-uuid INJECT_UUID]
-                        [--load LOAD] [--output OUTPUT] [--scopecreep]
-                        domain
-
-positional arguments:
-  domain                This domain will be hunted
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --debug               Print debug output
-  --inject-uuid INJECT_UUID
-                        UUID to inject as the primary key to this particular
-                        hunt.
-  --load LOAD           Load additional FQDNs, each on a separate line to
-                        extend the hunt.
-  --output OUTPUT       Draw output to this file
-  --scopecreep          The certificate transparency can add other related
-                        domains. Add flag to enable scope creep
-
-
