@@ -1,7 +1,7 @@
 <?php
     require_once 'globals.php';
 
-    header("refresh:30;url=index.html");
+    /* header("refresh:30;url=index.html"); */
 
     echo '<html>';
     echo '   <body>';

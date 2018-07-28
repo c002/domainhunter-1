@@ -14,10 +14,15 @@ def domainhunter_start(j_args):
 
     if j_args.get("sideload") == "yes":
         otherfqdns = j_args.get("otherfqdns")
+
+        # Line ending fix
+        of = otherfqdns.replace("\r\n", "\n")
+        of = of + "\n"
+
         uuid_sideload = str(uuid.uuid4())
         path_sideload = PATH + "temp/" + uuid_sideload + ".sideload"
         f = open(path_sideload, "w")
-        f.write(otherfqdns)
+        f.write(of)
         f.close()
 
     my_cmd = []
@@ -45,8 +50,8 @@ def domainhunter_start(j_args):
     subprocess.Popen(my_cmd, env=my_env, stderr=subprocess.DEVNULL)
 
     # Clean up temp file, if created
-    if j_args.get("sideload") == "yes":
-        os.remove(path_sideload)
+#    if j_args.get("sideload") == "yes":
+#        os.remove(path_sideload)
 
     if j_args.get("wrapper") == "yes":
         my_cmd = []
