@@ -41,5 +41,5 @@ optional arguments:
 ---
 Demo output of koeroo.net:
 
-![alt text](https://raw.githubusercontent.com/okoeroo/domainhunter/master/demo.svg?sanitize=true)
+![alt text](https://raw.githubusercontent.com/okoeroo/domainhunter/master/demo/demo.svg?sanitize=true)
 
