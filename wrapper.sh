@@ -20,7 +20,7 @@ if [ $SCOPECREEP = "yes" ]; then
 else
     ./domainhunter2.py --inject-uuid $UUID --scopecreep --output results/$UUID.svg $DOMAIN
 fi
-./create_html_result_page.py --schema https:// --fqdn domainhunter.koeroo.net --resultdir results/ --uuidhunt $UUID --resultext svg
+./create_html_result_page.py -v --schema https:// --fqdn domainhunter.koeroo.net --resultdir results/ --uuidhunt $UUID --resultext svg
 
 echo "Domainhunt finished for $DOMAIN at $UUID"
 

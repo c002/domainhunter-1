@@ -10,6 +10,7 @@ PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
 
 # Parser
 parser = argparse.ArgumentParser("create_html_result_page.py")
+parser.add_argument('-v', '--verbose', dest='verbose', default=False, action="store_true", help="Print more info")
 parser.add_argument("--schema", help="http:// or https://", type=str, required=True)
 parser.add_argument("--fqdn", help="FQDN or host component of an URL", type=str, required=True)
 parser.add_argument("--resultdir", help="(relative) directory for the results", type=str, required=True)
@@ -51,6 +52,10 @@ html = ' '.join(['<html><body>\n',
                  'type="image/svg+xml"></embed>',
                  '</body></html>\n'])
 
-f = open("./" + args.resultdir + "/" + args.uuidhunt + ".html",'w')
+fpath = "./" + args.resultdir + "/" + args.uuidhunt + ".html"
+f = open(fpath,'w')
 f.write(html)
+
+if args.verbose:
+    print("URL:", url, "in file", fpath)
 
