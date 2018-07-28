@@ -24,6 +24,12 @@
             $scopecreep = "no";
         }
 
+        $sideload = "no";
+        $otherfqdns = "";
+        if (array_key_exists("otherfqdns", $_POST) and !empty($_POST["otherfqdns"])) {
+            $otherfqdns = $_POST["otherfqdns"];
+            $sideload = "yes";
+        }
 
         /* Sanitizer */
         if(preg_match('/[^\.a-zA-Z\-0-9]/i', $domain)) {
@@ -47,19 +53,22 @@
                             "fqdn" => $domain,
                             "status" => "processing",
                             "scopecreep" => $scopecreep,
-                            "sideload" => "no"
+                            "sideload" => $sideload
                            ));
         $GLOBALS['db']->commit();
 
-        //open connection
-        curl_setopt($ch,CURLOPT_POST,count($fields));
-        curl_setopt($ch,CURLOPT_POSTFIELDS,$fields_string);
 
-        $data = array("uuid_hunt" => $uuid, "domain" => $domain, "scopecreep" => $scopecreep, "wrapper" => "yes");
+        $data = array("uuid_hunt" => $uuid,
+                      "domain" => $domain,
+                      "scopecreep" => $scopecreep,
+                      "wrapper" => "yes",
+                      "sideload" => $sideload,
+                      "otherfqdns" => $otherfqdns);
         $data_string = json_encode($data);
 
         $ch = curl_init("http://localhost:5000/domainhunter");
         curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_POST,count($data_string));
         curl_setopt($ch, CURLOPT_POSTFIELDS, $data_string);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array(

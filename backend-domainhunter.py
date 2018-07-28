@@ -3,14 +3,22 @@
 import subprocess, os, sys
 import time
 import json
+import uuid
 import falcon
 from wsgiref import simple_server
-
 
 def domainhunter_start(j_args):
     # Data in j_args is already sanitized
 
     print('Launching domainhunter', j_args)
+
+    if j_args.get("sideload") == "yes":
+        otherfqdns = j_args.get("otherfqdns")
+        uuid_sideload = str(uuid.uuid4())
+        path_sideload = PATH + "temp/" + uuid_sideload + ".sideload"
+        f = open(path_sideload, "w")
+        f.write(otherfqdns)
+        f.close()
 
     my_cmd = []
     my_cmd.append("./domainhunter2.py")
@@ -20,6 +28,10 @@ def domainhunter_start(j_args):
 
     my_cmd.append("--inject-uuid")
     my_cmd.append(j_args.get("uuid_hunt"))
+
+    if j_args.get("sideload") == "yes":
+        my_cmd.append("--sideload")
+        my_cmd.append(path_sideload)
 
     my_cmd.append("--output")
     my_cmd.append("results/" + j_args.get("uuid_hunt") + ".svg")
@@ -31,6 +43,10 @@ def domainhunter_start(j_args):
     my_env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" + my_env["PATH"]
     os.chdir("/var/www/domainhunter.koeroo.net")
     subprocess.Popen(my_cmd, env=my_env, stderr=subprocess.DEVNULL)
+
+    # Clean up temp file, if created
+    if j_args.get("sideload") == "yes":
+        os.remove(path_sideload)
 
     if j_args.get("wrapper") == "yes":
         my_cmd = []
@@ -115,14 +131,18 @@ class DomainHunterAPI:
         daemonize(domainhunter_start, j)
         res.status = falcon.HTTP_200
 
-
-api = falcon.API()
-api.add_route('/domainhunter', DomainHunterAPI())
-
-
+### Main
 if __name__ == "__main__":
+    # Init
+    PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
+
+    api = falcon.API()
+    api.add_route('/domainhunter', DomainHunterAPI())
+
     host = '127.0.0.1'
     port = 5000
     httpd = simple_server.make_server(host, port, api)
     print("Locked and loaded for the hunt!")
+    print("Operating on", host, "port", port, "from current working dir", PATH)
+    print("Loaded route: '/domainhunter'")
     httpd.serve_forever()

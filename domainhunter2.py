@@ -1025,7 +1025,7 @@ PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
 parser = argparse.ArgumentParser("domainhunter2.py")
 parser.add_argument('--debug', default=False, action="store_true", help="Print debug output")
 parser.add_argument("--inject-uuid", help="UUID to inject as the primary key to this particular hunt.", type=str)
-parser.add_argument("--load", help="Load additional FQDNs, each on a separate line to extend the hunt.", type=str)
+parser.add_argument("--sideload", help="Load additional FQDNs, each on a separate line to extend the hunt.", type=str)
 parser.add_argument('--output', default=False, help="Draw output to this file", type=str)
 parser.add_argument('--scopecreep', default=False, action="store_true", help="The certificate transparency can add other related domains. Add flag to enable scope creep")
 parser.add_argument('domain', help="This domain will be hunted", type=str)
@@ -1038,14 +1038,14 @@ else:
     w = Workload(args.domain, args.inject_uuid)
 
 # Side load
-side_loaded = None
-if args.load:
-    if not os.path.isfile(args.load):
-        print("Error: file", args.load, "does not exist")
+sideloaded = None
+if args.sideload:
+    if not os.path.isfile(args.sideload):
+        print("Error: file", args.sideload, "does not exist")
         sys.exit(1)
-    print("Loading", args.load, file=sys.stderr)
-    side_loaded = open(args.load, 'r').read().splitlines()
-    print("Loading done, found", len(side_loaded), "lines of FQDN(s)", file=sys.stderr)
+    print("Loading", args.sideload, file=sys.stderr)
+    sideloaded = open(args.sideload, 'r').read().splitlines()
+    print("Loading done, found", len(sideloaded), "lines of FQDN(s)", file=sys.stderr)
 
 
 # Announce
@@ -1055,7 +1055,7 @@ else:
     print(str(w.uuid_hunt), "for a search on base FQDN", w.base_fqdn, "started at", str(w.s_dt), file=sys.stdout)
 
 # Start the hunt
-resolve_multi_sub_domains(args.scopecreep, side_loaded)
+resolve_multi_sub_domains(args.scopecreep, sideloaded)
 
 # Draw
 if args.output:

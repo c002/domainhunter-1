@@ -1,17 +1,19 @@
 <?php
     require_once 'globals.php';
 
-    header("refresh:10;url=index.html");
+    header("refresh:30;url=index.html");
 
     echo '<html>';
     echo '   <body>';
-    echo '   This page will refresh every 10 seconds, type faster...';
+    echo '   <input type="button" value="Refresh Page" onClick="window.location.reload()">';
     echo '   <br>';
     echo '   <br>';
 
     echo '      <form action = "/process_post.php" method = "POST">';
     echo '         Domain: <input type="text" name="domain" autocomplete="off"> <br>';
     echo '         Scope creep: <input type="checkbox" name="scopecreep" value="yes"> <br>';
+    echo '         (Optional) Additional FQDNs:<br><TEXTAREA NAME="otherfqdns" ROWS=10 COLS=20 ></TEXTAREA>';
+    echo '         <br>';
     echo '         <input type = "submit" value = "Submit">';
     echo '      </form>';
 
