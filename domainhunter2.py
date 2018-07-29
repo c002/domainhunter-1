@@ -524,7 +524,7 @@ class Workload:
 
         for k in ll_ns.keys():
             ll_label = '\n'.join(sorted(ll_ns[k]))
-            ll_label_start = ' '.join(['NS:', k])
+            ll_label_start = ' '.join(['NS:', k, "\n"])
 
             u = str(uuid.uuid4())
             self.MainGraph.add_node(u, style='filled',
