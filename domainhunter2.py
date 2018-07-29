@@ -509,6 +509,35 @@ class Workload:
                                                     fontcolor=fontcolor,
                                     label=rec['fqdn'] + "\n" + rec['r_type'] + "\n" + rec['value'])
 
+        # Cluster the Name Servers per domain and link them to the virtual blob
+        ll_ns = {}
+        for rec_ns in all_dns_rr:
+            # Color by RR type
+            if rec_ns['r_type'] == "NS":
+                for rec_ns_inner in all_dns_rr:
+                    if rec_ns_inner['r_type'] == "NS" and rec_ns['fqdn'] == rec_ns_inner['fqdn']:
+                        if not rec_ns['fqdn'] in ll_ns:
+                            ll_ns[rec_ns['fqdn']] = []
+
+                        if rec_ns_inner['value'] not in ll_ns[rec_ns['fqdn']]:
+                            ll_ns[rec_ns['fqdn']].append(rec_ns_inner['value'])
+
+        for k in ll_ns.keys():
+            ll_label = '\n'.join(sorted(ll_ns[k]))
+            ll_label_start = ' '.join(['NS:', k])
+
+            u = str(uuid.uuid4())
+            self.MainGraph.add_node(u, style='filled',
+                                       color='gray30',
+                                       fillcolor='cornsilk',
+                                       fontcolor='black',
+                                       label=ll_label_start + ll_label)
+
+            for l_v in sorted(ll_ns[k]):
+                for rec_ns in all_dns_rr:
+                    if rec_ns['r_type'] == "NS" and rec_ns['fqdn'] == k and rec_ns['value'] == l_v:
+                        self.MainGraph.add_edge(rec_ns['uuid_rr'], u)
+
 
         # HACK: re-plot the CNAME linkage to all RR types not yet linked
         for rr in self.get_dns_rr():
