@@ -549,11 +549,22 @@ class Workload:
         main_asn = []
         all_asns = self.get_asns()
         for rec in all_asns:
-            label = ' '.join(["ASN:", rec['asn'], "\n",
-                             rec['asn_description'], "\n",
-                             rec['asn_date'], "\n",
-                             rec['asn_cidr']
-                             ])
+            ll = []
+            ll.append("AS per CIDR\n")
+            if rec['asn'] is not None:
+                ll.append(rec['asn'])
+                ll.append("\n")
+            if rec['asn_description'] is not None:
+                ll.append(rec['asn_description'])
+                ll.append("\n")
+            if rec['asn_date'] is not None:
+                ll.append(rec['asn_date'])
+                ll.append("\n")
+            if rec['asn_cidr'] is not None:
+                ll.append(rec['asn_cidr'])
+                ll.append("\n")
+
+            label = ' '.join(ll)
             self.MainGraph.add_node(rec['uuid_asn'], style='filled',
                                                      color='forestgreen',
                                                      fontcolor='white',
@@ -578,13 +589,26 @@ class Workload:
             cidrs = []
             for rec in all_asns:
                 if rec['asn'] == ma['asn']:
-                    cidrs.append(rec['asn_cidr'])
+                    if 'asn_cidr' in rec and rec['asn_cidr'] is not None:
+                        cidrs.append(rec['asn_cidr'])
 
-            label = ' '.join(["ASN:", ma['asn'], "\n",
-                              ma['asn_description'], "\n",
-                              ma['asn_registry'], "\n",
-                              ma['asn_country_code']
-                             ])
+            llma = []
+            llma.append("ASN:\n")
+            if ma['asn'] is not None:
+                llma.append(ma['asn'])
+                llma.append("\n")
+            if ma['asn_description'] is not None:
+                llma.append(ma['asn_description'])
+                llma.append("\n")
+            if ma['asn_registry'] is not None:
+                llma.append(ma['asn_registry'])
+                llma.append("\n")
+            if ma['asn_country_code'] is not None:
+                llma.append(ma['asn_country_code'])
+                llma.append("\n")
+
+            label = ' '.join(llma)
+
             for cidr in sorted(cidrs):
                 label = label + "\n" + cidr
 
@@ -598,7 +622,7 @@ class Workload:
                 if rec['asn'] == ma['asn']:
                     self.MainGraph.add_edge(rec['uuid_asn'], ma['uuid_main_asn'])
 
-    def draw(self, destination):
+    def draw_svg(self, destination):
         # Init graphviz
         self.MainGraph = AGraph(overlap=False,rankdir="LR")
 
@@ -608,6 +632,52 @@ class Workload:
         # Finish lay-out and write the graph
         self.MainGraph.layout()
         self.MainGraph.draw(destination, prog='dot')
+
+    def draw_txt(self, destination):
+        f = open(destination, "w")
+        all_dns_rr = self.get_dns_rr()
+        all_dns_rr_parent_child = self.get_dns_rr_parent_child()
+        for rec in all_dns_rr:
+            for rec_pc in all_dns_rr_parent_child:
+                if rec_pc['uuid_parent'] == self.uuid_hunt and rec['uuid_rr'] == rec_pc['uuid_child']:
+                    f.write(''.join([self.base_fqdn, " (base2fqdn) ", rec['fqdn'], " {", rec['r_type'], "/", rec['value'], "}", "\n"]))
+
+        for rec in all_dns_rr:
+            f.write(''.join([rec['fqdn'], " (", rec['r_type'], ") ", rec['value'], "\n"]))
+
+        # IP to ASN
+        all_ips = self.get_ips()
+        all_ip2asns = self.get_ip2asns()
+        all_asns = self.get_asns()
+        for rec in all_asns:
+            llma = []
+            llma.append("ASN:")
+            if rec['asn'] is not None:
+                llma.append(rec['asn'])
+            if rec['asn_description'] is not None:
+                llma.append(rec['asn_description'])
+            if rec['asn_registry'] is not None:
+                llma.append(rec['asn_registry'])
+            if rec['asn_country_code'] is not None:
+                llma.append(rec['asn_country_code'])
+            label = ' '.join(llma)
+
+            for rec_ip in all_ips:
+                for ip2asn in all_ip2asns:
+                    if ip2asn['uuid_ip'] == rec_ip['uuid_ip']:
+                        if ip2asn['uuid_asn'] == rec['uuid_asn']:
+                            f.write(''.join([rec_ip['ip'], " (ip2asn) ", label, "\n"]))
+
+        f.close()
+
+
+        # HACK: re-plot the CNAME linkage to all RR types not yet linked
+#        for rr in self.get_dns_rr():
+#            if rr['r_type'] == 'CNAME':
+#                for rr_inner in self.get_dns_rr():
+#                    # Combine the CNAME value to whatever RR
+#                    if rr['value'] == rr_inner['fqdn']:
+#                        self.add_dns_rr_parent_child(rr['uuid_rr'], rr_inner['uuid_rr'])
 
 
 ### Functions
@@ -1018,6 +1088,10 @@ def resolve_multi_sub_domains(scopecreep, sideload):
 ##### MAIN #####
 import argparse
 
+#import cProfile
+#pr = cProfile.Profile()
+#pr.enable()
+
 # Init
 PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
 
@@ -1060,6 +1134,12 @@ resolve_multi_sub_domains(args.scopecreep, sideloaded)
 # Draw
 if args.output:
     print("Draw mode: plotting to", args.output, file=sys.stderr)
-    w.draw(args.output)
+    if args.output.endswith(".svg"):
+        w.draw_svg(args.output)
+    elif args.output.endswith(".txt"):
+        w.draw_txt(args.output)
 
+
+#pr.disable()
+#pr.print_stats(sort='time')
 # End
