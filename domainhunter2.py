@@ -514,8 +514,8 @@ class Workload:
         for rr in self.get_dns_rr():
             if rr['r_type'] == 'CNAME':
                 for rr_inner in self.get_dns_rr():
-                    # Combine the CNAME value to whatever RR
-                    if rr['value'] == rr_inner['fqdn']:
+                    # Combine the CNAME value (minus the dot final character) to whatever RR
+                    if rr['value'][:-1] == rr_inner['fqdn']:
                         self.add_dns_rr_parent_child(rr['uuid_rr'], rr_inner['uuid_rr'])
 
         # Plot the DNS RR Type linkages
