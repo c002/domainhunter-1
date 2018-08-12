@@ -37,6 +37,8 @@ optional arguments:
 4. pip3
 5. pip3 install --upgrade ipwhois
 6. pip3 install falcon
+7. python3-requests
+8. python3-requests-cache
 
 ---
 Demo output of koeroo.net:

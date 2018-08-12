@@ -16,6 +16,8 @@ from pprint import pprint
 import re
 import sqlite3
 from urllib.request import urlopen
+import requests
+import requests_cache
 import json
 from pygraphviz import *
 
@@ -42,7 +44,7 @@ class Workload:
         self.mem_db['connection'].isolation_level = None
         # self.mem_db['connection'] = sqlite3.connect(PATH + 'db/domainhunter2.db')
         self.mem_db['cursor'] = self.mem_db['connection'].cursor()
-        self.mem_db['connection'].execute('''CREATE TABLE fqdns (uuid_fqdn, fqdn TEXT, status TEXT, uuid_parent TEXT)''')
+        self.mem_db['connection'].execute('''CREATE TABLE fqdns (uuid_fqdn TEXT, fqdn TEXT, status TEXT, uuid_parent TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr (uuid_rr TEXT, fqdn TEXT, r_type TEXT, value TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE asn (uuid_asn TEXT, asn TEXT, asn_description TEXT,
                                                                asn_date TEXT, asn_registry TEXT,
@@ -52,6 +54,8 @@ class Workload:
         self.mem_db['connection'].execute('''CREATE TABLE ip2asn (uuid_ip TEXT, uuid_asn TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr_parent_child (uuid_parent TEXT, uuid_child TEXT)''')
         self.mem_db['connection'].execute('''CREATE TABLE dns_rr_to_ip (uuid_rr TEXT, uuid_ip TEXT)''')
+        self.mem_db['connection'].execute('''CREATE TABLE redirect (uuid_redir TEXT, schema TEXT, fqdn TEXT, location TEXT)''')
+        self.mem_db['connection'].execute('''CREATE TABLE fqdn2redirect (uuid_fqdn TEXT, uuid_redir TEXT)''')
 
         self.store_db['connection'] = sqlite3.connect(PATH + 'db/domainhunter2.db')
         self.store_db['connection'].isolation_level = None
@@ -467,6 +471,54 @@ class Workload:
             all_ip2asns.append(rec)
         return all_ip2asns
 
+    ### Table: redirect
+    def add_redirect(self, schema, fqdn, location):
+        u = str(uuid.uuid4())
+        sql = ' '.join(["INSERT INTO redirect (uuid_redir, schema, fqdn, location)",
+                                    "VALUES (:uuid_redir, :schema, :fqdn, :location)"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"uuid_redir":u,
+                                       "schema":schema,
+                                       "fqdn":fqdn,
+                                       "location":location})
+        return u
+
+    def get_redirects(self):
+        all_redirects = []
+        sql = ' '.join(["SELECT uuid_redir, schema, fqdn, location",
+                          "FROM redirect"])
+        self.mem_db['cursor'].execute(sql)
+        for (uuid_redir, schema, fqdn, location) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_redir'] = uuid_redir
+            rec['schema'] = schema
+            rec['fqdn'] = fqdn
+            rec['location'] = location
+            all_redirects.append(rec)
+        return all_redirects
+
+    ### Table: fqdn2redirect
+    def add_fqdn2redirect(self, uuid_fqdn, uuid_redir):
+        sql = ' '.join(["INSERT INTO fqdn2redirect (uuid_fqdn, uuid_redir)",
+                                    "VALUES (:uuid_fqdn, :uuid_redir)"])
+        self.mem_db['cursor'].execute(sql,
+                                      {"uuid_fqdn":uuid_fqdn,
+                                       "uuid_redir":uuid_redir})
+        return True
+
+    def get_fqdn2redirects(self):
+        all_fqdn2redirects = []
+        sql = ' '.join(["SELECT uuid_fqdn, uuid_redir",
+                          "FROM fqdn2redirect"])
+        self.mem_db['cursor'].execute(sql)
+        for (uuid_fqdn, uuid_redir) in self.mem_db['cursor']:
+            rec = {}
+            rec['uuid_fqdn'] = uuid_fqdn
+            rec['uuid_redir'] = uuid_redir 
+            all_fqdn2redirects.append(rec)
+        return all_fqdn2redirects
+
+    ### Drawing stuff
     def plot(self):
         self.MainGraph.add_node(self.uuid_hunt, style='filled', color='blue', fontcolor='white',
                                            label="Main search domain is:\n" + self.base_fqdn)
@@ -650,6 +702,27 @@ class Workload:
             for ma in main_asn:
                 if rec['asn'] == ma['asn']:
                     self.MainGraph.add_edge(rec['uuid_asn'], ma['uuid_main_asn'])
+
+        # URL location
+        redir = self.get_redirects()
+        for rd in redir:
+            label = ''.join([rd['schema'],
+                             rd['fqdn'], '\n',
+                             'Location', '\n',
+                             rd['location']
+                             ])
+            self.MainGraph.add_node(rd['uuid_redir'], style='filled',
+                                                      color='purple',
+                                                      fontcolor='white',
+                                                      label=label)
+
+            links = self.get_dns_rr_by_fqdn(rd['fqdn'])
+            for l in links:
+                self.MainGraph.add_edge(l['uuid_rr'], rd['uuid_redir'])
+        # URL link fqdn to link
+#        fqdn2redirects = self.get_fqdn2redirects()
+#        for fr in fqdn2redirects:
+#            self.MainGraph.add_edge(fr['uuid_fqdn'], fr['uuid_redir'])
 
     def draw_svg(self, destination):
         # Init graphviz
@@ -937,8 +1010,13 @@ def analyse_asn(ip):
     print (results, file=sys.stderr)
     return results
 
-    # {'asn': '15169', 'asn_date': '2008-09-30', 'asn_description': 'GOOGLE - Google LLC, US', 'asn_cidr': '2404:6800:4003::/48', 'asn_registry': 'apnic', 'asn_country_code': 'AU'}
-    # {'asn': '15169', 'asn_date': '2007-03-13', 'asn_description': 'GOOGLE - Google LLC, US', 'asn_cidr': '74.125.200.0/24', 'asn_registry': 'arin', 'asn_country_code': 'US'}
+    # {'asn': '15169', 'asn_date': '2008-09-30', 'asn_description': 'GOOGLE -
+    # Google LLC, US', 'asn_cidr': '2404:6800:4003::/48', 'asn_registry':
+    # 'apnic', 'asn_country_code': 'AU'}
+
+    # {'asn': '15169', 'asn_date': '2007-03-13', 'asn_description': 'GOOGLE -
+    # Google LLC, US', 'asn_cidr': '74.125.200.0/24', 'asn_registry': 'arin',
+    # 'asn_country_code': 'US'}
 
 
 #    elif r_type == 'A':
@@ -959,6 +1037,34 @@ def analyse_asn(ip):
 #            print('Error: %s' % e, file=sys.stderr)
 #
 #        #store_record(uuid_child, uuid_parent, fqdn, r_type, str(r_data), s_dt, q_dt, r_dt)
+
+
+def req_get_inner(schema, fqdn_rec):
+#    expire_after = timedelta(minutes=15)
+#    requests_cache.install_cache('demo_cache1', expire_after=expire_after)
+
+    base_url = schema + fqdn_rec['fqdn']
+    try:
+        r = requests.get(base_url, allow_redirects=False, timeout=2)
+        if r.status_code >= 300 and r.status_code < 400:
+            if 'Location' in r.headers.keys():
+                u = w.add_redirect(schema, fqdn_rec['fqdn'], r.headers['Location'])
+                w.add_fqdn2redirect(fqdn_rec['uuid'], u)
+                print("Location found:",
+                      schema + fqdn_rec['fqdn'],
+                      r.headers['Location'],
+                      file=sys.stderr)
+                return True
+    except:
+        pass
+
+    return False
+
+
+def req_get(fqdn_rec):
+    print(fqdn_rec)
+    req_get_inner('http://', fqdn_rec)
+    req_get_inner('https://', fqdn_rec)
 
 
 def resolve_r_type(uuid_parent, fqdn, r_type):
@@ -1102,13 +1208,22 @@ def resolve_multi_sub_domains(scopecreep, sideload):
 
         for fqdn_rec in l:
             print("FQDN to examine (workload)", fqdn_rec['fqdn'], file=sys.stderr)
+            # Start resolving.
             resolve_multi_type(fqdn_rec['uuid_parent'], fqdn_rec['fqdn'])
+
+            # HTTP Get and record Location
+            req_get(fqdn_rec)
+
+            # Flag this FQDN as done.
             w.update_fqdns_status_by_fqdn(fqdn_rec['fqdn'], "done")
 
         print("Count todo", w.count_fqdns_by_status("todo"), file=sys.stderr)
         print("Count done", w.count_fqdns_by_status("done"), file=sys.stderr)
 
     # Post processing
+    # Debug
+    print(w.get_redirects())
+
 #    w.detect_and_remove_dns_wildcard()
 #    w.detect_none_base_fqdn_rr_wilds_for_cleanup()
 
