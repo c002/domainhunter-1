@@ -45,11 +45,8 @@ url = ''.join(l_url)
 html = ' '.join(['<html><body>\n',
                  '<button onclick="window.location.href=\'/index.php\'">Return</button>',
                  '<br>\n',
-                 '<style>',
-                 '.fit { width: 400%; }',
-                 '</style>',
-                 '<embed src="' + url + '"',
-                 'type="image/svg+xml"></embed>',
+                 '<img width="1000px"',
+                 'src="' + url + '"></img>',
                  '</body></html>\n'])
 
 fpath = "./" + args.resultdir + "/" + args.uuidhunt + ".html"
