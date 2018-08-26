@@ -43,7 +43,6 @@ class Workload:
         self.base_fqdn = base_fqdn
         self.wildcard_canary = 'wildcardcanary' + '.' + self.base_fqdn
 
-#        self.initialize_db()
         self.s_dt = datetime.timestamp(datetime.utcnow())
         if uuid_hunt is None:
             self.uuid_hunt = str(uuid.uuid4())
@@ -55,40 +54,7 @@ class Workload:
         m['uuid_hunt'] = self.uuid_hunt
         m['base_fqdn'] = self.base_fqdn
         m['s_dt'] = self.s_dt
-        self.main_node_uuid = self.kg.store(m)
-
-    def initialize_db(self):
-        self.mem_db['connection'] = sqlite3.connect(':memory:')
-        self.mem_db['connection'].isolation_level = None
-        # self.mem_db['connection'] = sqlite3.connect(PATH + 'db/domainhunter2.db')
-        self.mem_db['cursor'] = self.mem_db['connection'].cursor()
-
-        self.mem_db['connection'].execute('''CREATE TABLE relations (uuid_src TEXT, uuid_dst TEXT, dt_create DATETIME)''')
-        self.mem_db['connection'].execute('''CREATE TABLE object (uuid TEXT, dt_create DATETIME)''')
-        self.mem_db['connection'].execute('''CREATE TABLE property (uuid_p TEXT, key TEXT, value TEXT)''')
-
-
-
-        self.mem_db['connection'].execute('''CREATE TABLE fqdns (uuid_fqdn TEXT, fqdn TEXT, status TEXT, uuid_parent TEXT)''')
-        self.mem_db['connection'].execute('''CREATE TABLE dns_rr (uuid_rr TEXT, fqdn TEXT, r_type TEXT, value TEXT)''')
-        self.mem_db['connection'].execute('''CREATE TABLE asn (uuid_asn TEXT, asn TEXT, asn_description TEXT,
-                                                               asn_date TEXT, asn_registry TEXT,
-                                                               asn_country_code TEXT, asn_cidr TEXT
-                                                              )''')
-        self.mem_db['connection'].execute('''CREATE TABLE ip (uuid_ip TEXT, ip TEXT, version TEXT)''')
-        self.mem_db['connection'].execute('''CREATE TABLE ip2asn (uuid_ip TEXT, uuid_asn TEXT)''')
-        self.mem_db['connection'].execute('''CREATE TABLE dns_rr_parent_child (uuid_parent TEXT, uuid_child TEXT)''')
-        self.mem_db['connection'].execute('''CREATE TABLE dns_rr_to_ip (uuid_rr TEXT, uuid_ip TEXT)''')
-        self.mem_db['connection'].execute('''CREATE TABLE redirect (uuid_redir TEXT, schema TEXT, fqdn TEXT, location TEXT)''')
-        self.mem_db['connection'].execute('''CREATE TABLE fqdn2redirect (uuid_fqdn TEXT, uuid_redir TEXT)''')
-
-        self.store_db['connection'] = sqlite3.connect(PATH + 'db/domainhunter2.db')
-        self.store_db['connection'].isolation_level = None
-        self.store_db['cursor'] = self.store_db['connection'].cursor()
-        try:
-            self.store_db['connection'].execute('''CREATE TABLE dns_rr_cache (fqdn TEXT, r_type TEXT, value TEXT, error TEXT)''')
-        except:
-            pass
+        self.main_node_uuid = self.kg.store(m, 'DOMAINHUNT')
 
     def dns_resolve_r_type(self, fqdn, r_type):
         q_dt = datetime.utcnow()
@@ -145,6 +111,35 @@ class Workload:
             print("Resolver error:", e, 'FQDN', fqdn, 'r_type', r_type, file=sys.stderr)
 
         return None
+
+    def dns_resolve_multi_type(self, uuid_parent, fqdn):
+        # Type options: A, AAAA, CAA, RRSIG, CNAME, MX, TXT,
+        #               PTR, NS, NAPTR, SOA, SRV, SSHFP, TLSA, ANY
+
+        # CNAME first
+        answers = self.dns_resolve_r_type(fqdn, 'CNAME')
+        if answers is not None:
+            for a in answers:
+                u = self.kg.store(a, 'DNS_RR')
+                self.kg.store_relation(uuid_parent, u, 'DNS_RESOLVE_R_TYPE')
+
+        if fqdn == self.base_fqdn:
+            answers = self.dns_resolve_r_type(fqdn, 'SOA')
+            if answers is not None:
+                for a in answers:
+                    u = self.kg.store(a, 'DNS_RR')
+                    self.kg.store_relation(uuid_parent, u, 'DNS_RESOLVE_R_TYPE')
+
+        # The rest, without CNAME, nor SOA
+        types = ['A', 'AAAA', 'CAA', 'RRSIG', 'MX', 'TXT',
+                 'PTR', 'NS', 'NAPTR', 'SRV', 'SSHFP', 'TLSA']
+        for t in types:
+            answers = self.dns_resolve_r_type(fqdn, t)
+            if answers is not None:
+                for a in answers:
+                    u = self.kg.store(a, 'DNS_RR')
+                    self.kg.store_relation(uuid_parent, u, 'DNS_RESOLVE_R_TYPE')
+
 
     ### Disk cache of dns_rr records for speed up
     ### TODO: should get a (longer) TTL
@@ -1202,37 +1197,6 @@ def resolve_r_type(uuid_parent, fqdn, r_type):
 
     return False
 
-def resolve_multi_type(uuid_parent, fqdn):
-    # Type options: A, AAAA, CAA, RRSIG, CNAME, MX, TXT,
-    #               PTR, NS, NAPTR, SOA, SRV, SSHFP, TLSA, ANY
-
-    # CNAME first
-    answers = w.dns_resolve_r_type(fqdn, 'CNAME')
-    if answers is not None:
-        for a in answers:
-            u = w.kg.store(a, 'DNS_RR')
-            w.kg.store_relation(uuid_parent, u, 'DNS_RESOLVE_R_TYPE')
-
-    # Does this FQDN exist as CNAME ? yes, skip others completely : no, continue
-#    if w.count_dns_rr_by_fqdn_and_r_type(fqdn, 'CNAME') > 0:
-#        return
-
-    if fqdn == w.base_fqdn:
-        answers = w.dns_resolve_r_type(fqdn, 'SOA')
-        if answers is not None:
-            for a in answers:
-                u = w.kg.store(a, 'DNS_RR')
-                w.kg.store_relation(uuid_parent, u, 'DNS_RESOLVE_R_TYPE')
-
-    # The rest, without CNAME, nor SOA
-    types = ['A', 'AAAA', 'CAA', 'RRSIG', 'MX', 'TXT',
-             'PTR', 'NS', 'NAPTR', 'SRV', 'SSHFP', 'TLSA']
-    for t in types:
-        answers = w.dns_resolve_r_type(fqdn, t)
-        if answers is not None:
-            for a in answers:
-                u = w.kg.store(a, 'DNS_RR')
-                w.kg.store_relation(uuid_parent, u, 'DNS_RESOLVE_R_TYPE')
 
 
 def add_ct_fqdn(base_fqdn, scopecreep):
@@ -1290,20 +1254,18 @@ def resolve_multi_sub_domains():
             print("FQDN to examine (workload)", fqdn_rec['fqdn'], file=sys.stderr)
 
             # Start resolving.
-            resolve_multi_type(w.main_node_uuid, fqdn_rec['fqdn'])
-
-            # HTTP Get and record Location
-            req_get(fqdn_rec)
+            w.dns_resolve_multi_type(w.main_node_uuid, fqdn_rec['fqdn'])
 
             # Flag this FQDN as done.
             w.update_fqdns_status_by_fqdn(fqdn_rec['fqdn'])
+
+#            # HTTP Get and record Location
+#            req_get(fqdn_rec)
 
         print("Count todo", w.kg.count_objects_list('WORKLOAD_FQDN_TODO'), file=sys.stderr)
         print("Count done", w.kg.count_objects_list('WORKLOAD_FQDN_DONE'), file=sys.stderr)
 
         print("-------------------------------------------------------")
-        w.kg.test()
-        print("=======================================================")
         pp = pprint.PrettyPrinter(indent=3)
         pp.pprint(w.kg.enum_objects_list_rich())
         print("*******************************************************")
