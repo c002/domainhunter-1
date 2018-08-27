@@ -32,16 +32,17 @@ class Workload:
     store_db = {}
     mem_db = {}
 
-            # resolver.nameservers=['8.8.8.8', '8.8.4.4', '9.9.9.9']
+    # resolver.nameservers=['8.8.8.8', '8.8.4.4', '9.9.9.9']
     config_dns_resolvers = ['127.0.0.1']
     config_dns_timeout  = 8
     config_dns_lifetime = 8
 
-    def __init__(self, base_fqdn, uuid_hunt=None):
+    def __init__(self, base_fqdn, sideload=None, uuid_hunt=None):
         self.kg = KGraph()
 
         self.base_fqdn = base_fqdn
         self.wildcard_canary = 'wildcardcanary' + '.' + self.base_fqdn
+        self.sideload = sideload # this is the argv value
 
         self.s_dt = datetime.timestamp(datetime.utcnow())
         if uuid_hunt is None:
@@ -49,12 +50,36 @@ class Workload:
         else:
             self.uuid_hunt = uuid_hunt
 
+        # Initial Side load
+        if self.sideload is not None:
+            self.initial_load_sideload()
+
         # Create first node
         m = {}
         m['uuid_hunt'] = self.uuid_hunt
         m['base_fqdn'] = self.base_fqdn
         m['s_dt'] = self.s_dt
         self.main_node_uuid = self.kg.store(m, 'DOMAINHUNT')
+
+    def initial_load_sideload(self):
+        print("Loading", self.sideload, file=sys.stderr)
+        self.sideloaded = open(self.sideload, 'r').read().splitlines()
+        print("Loading done, found", len(self.sideloaded), "lines of FQDN(s)", file=sys.stderr)
+
+    def cert_add_ct_fqdn(self, scopecreep):
+        results = []
+        html = urlopen("https://certspotter.com/api/v0/certs?expired=false&duplicate=false&domain=" + self.base_fqdn)
+        s = html.read()
+        res = json.loads(s.decode('utf8'))
+
+        for ct_cert in res:
+            for fqdn in ct_cert['dns_names']:
+                if not scopecreep and not fqdn.endswith("." + self.base_fqdn):
+                    # Skip, because we are avoiding scope creep
+                    continue
+
+                results.append(fqdn)
+        return results
 
     def dns_resolve_r_type(self, fqdn, r_type):
         q_dt = datetime.utcnow()
@@ -1199,22 +1224,6 @@ def resolve_r_type(uuid_parent, fqdn, r_type):
 
 
 
-def add_ct_fqdn(base_fqdn, scopecreep):
-    results = []
-    html = urlopen("https://certspotter.com/api/v0/certs?expired=false&duplicate=false&domain=" + base_fqdn)
-    s = html.read()
-    res = json.loads(s.decode('utf8'))
-
-    for ct_cert in res:
-        for fqdn in ct_cert['dns_names']:
-            if not scopecreep and not fqdn.endswith("." + base_fqdn):
-                # Skip, because we are avoiding scope creep
-                continue
-
-            results.append(fqdn)
-    return results
-
-
 def load_sub_domains(scopecreep, sideload):
     # Add the base
     w.add_fqdn(w.base_fqdn, 'FQDN_BASE')
@@ -1233,7 +1242,7 @@ def load_sub_domains(scopecreep, sideload):
         w.add_fqdn(prefix + '.' + w.base_fqdn, 'FQDN_STATIC_RESEARCH_LIST')
 
     # Use certificate transparency
-    ct_res = add_ct_fqdn(w.base_fqdn, scopecreep)
+    ct_res = w.cert_add_ct_fqdn(scopecreep)
     for f in ct_res:
         w.add_fqdn(f, 'FQDN_CERTIFICATE_TRANSPARENCY')
 
@@ -1287,31 +1296,43 @@ import argparse
 PATH = os.path.dirname(os.path.realpath(__file__)) + '/'
 
 # Parser
-parser = argparse.ArgumentParser("domainhunter2.py")
-parser.add_argument('--debug', default=False, action="store_true", help="Print debug output")
-parser.add_argument("--inject-uuid", help="UUID to inject as the primary key to this particular hunt.", type=str)
-parser.add_argument("--sideload", help="Load additional FQDNs, each on a separate line to extend the hunt.", type=str)
-parser.add_argument('--output', default=False, help="Draw output to this file", type=str)
-parser.add_argument('--scopecreep', default=False, action="store_true", help="The certificate transparency can add other related domains. Add flag to enable scope creep")
-parser.add_argument('domain', help="This domain will be hunted", type=str)
+parser = argparse.ArgumentParser(os.path.basename(__file__))
+parser.add_argument('--debug',
+                    default=False,
+                    action="store_true",
+                    help="Print debug output")
+parser.add_argument("--inject-uuid",
+                    help="UUID to inject as the primary key to this particular hunt.",
+                    type=str)
+parser.add_argument("--sideload",
+                    default=None,
+                    help="Load additional FQDNs, each on a separate line to extend the hunt.",
+                    type=str)
+parser.add_argument('--output',
+                    default=False,
+                    help="Draw output to this file",
+                    type=str)
+parser.add_argument('--scopecreep',
+                    default=False,
+                    action="store_true",
+                    help="The certificate transparency can add other related domains. Add flag to enable scope creep")
+parser.add_argument('domain',
+                    help="This domain will be hunted",
+                    type=str)
 args = parser.parse_args()
 
-# Generate or Get UUID for this hunt
-if not args.inject_uuid:
-    w = Workload(args.domain)
-else:
-    w = Workload(args.domain, args.inject_uuid)
-
-# Side load
+# Side load check
 sideloaded = None
 if args.sideload:
     if not os.path.isfile(args.sideload):
         print("Error: file", args.sideload, "does not exist")
         sys.exit(1)
-    print("Loading", args.sideload, file=sys.stderr)
-    sideloaded = open(args.sideload, 'r').read().splitlines()
-    print("Loading done, found", len(sideloaded), "lines of FQDN(s)", file=sys.stderr)
 
+# Generate or Get UUID for this hunt
+if not args.inject_uuid:
+    w = Workload(args.domain, args.sideload)
+else:
+    w = Workload(args.domain, args.sideload, args.inject_uuid)
 
 # Announce
 if args.output:
