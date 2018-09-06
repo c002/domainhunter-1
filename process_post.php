@@ -40,23 +40,9 @@
             return;
         }
 
-        /* Store domainhunt */
-        $sql = 'INSERT INTO domainhunts (uuid_hunt, fqdn, status, scopecreep, sideload)'.
-               '     VALUES (:uuid_hunt, :fqdn, :status, :scopecreep, :sideload)';
 
+        /* Create UUID HUNT */
         $uuid = guidv4();
-
-        $GLOBALS['db']->begintransaction();
-        $statement = $GLOBALS['db']->prepare($sql);
-        $statement->execute(array(
-                            "uuid_hunt" => $uuid,
-                            "fqdn" => $domain,
-                            "status" => "processing",
-                            "scopecreep" => $scopecreep,
-                            "sideload" => $sideload
-                           ));
-        $GLOBALS['db']->commit();
-
 
         $data = array("uuid_hunt" => $uuid,
                       "domain" => $domain,
@@ -76,9 +62,35 @@
             'Content-Length: ' . strlen($data_string))
         );
         $result = curl_exec($ch);
-        print $result;
+        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
 
-        header("refresh:1;url=index.html");
+
+        if ($httpcode == 200) {
+            /* Store domainhunt */
+            $sql = 'INSERT INTO domainhunts (uuid_hunt, fqdn, status, scopecreep, sideload)'.
+                   '     VALUES (:uuid_hunt, :fqdn, :status, :scopecreep, :sideload)';
+
+
+            $GLOBALS['db']->begintransaction();
+            $statement = $GLOBALS['db']->prepare($sql);
+            $statement->execute(array(
+                                "uuid_hunt" => $uuid,
+                                "fqdn" => $domain,
+                                "status" => "processing",
+                                "scopecreep" => $scopecreep,
+                                "sideload" => $sideload
+                               ));
+            $GLOBALS['db']->commit();
+
+            header("refresh:1;url=index.html");
+            print "Processing...\n<br>";
+            print $result;
+        } else {
+            header("refresh:3;url=index.html");
+            print $result;
+        }
+
         return;
     }
     if ($_SERVER['REQUEST_METHOD'] === 'GET') {

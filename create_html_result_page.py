@@ -45,7 +45,7 @@ url = ''.join(l_url)
 html = ' '.join(['<html><body>\n',
                  '<button onclick="window.location.href=\'/index.php\'">Return</button>',
                  '<br>\n',
-                 '<img width="1000px"',
+                 '<img width="2500px"',
                  'src="' + url + '"></img>',
                  '</body></html>\n'])
 

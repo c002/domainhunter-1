@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 
+from datetime import tzinfo, timedelta, datetime
 import subprocess, os, sys
 import time
 import json
 import uuid
 import falcon
+import requests
+import requests_cache
 from wsgiref import simple_server
+
+URL_TLDS = 'https://data.iana.org/TLD/tlds-alpha-by-domain.txt'
+
 
 def domainhunter_start(j_args):
     # Data in j_args is already sanitized
@@ -97,6 +103,27 @@ def daemonize(func_child, j_args):
         os.waitpid(newpid, 0)
         pids = (os.getpid(), newpid)
 
+def check_fqdn_is_legit(fqdn):
+    expire_after = timedelta(minutes=30)
+    requests_cache.install_cache('requests_tld_cache', expire_after=expire_after)
+
+    base_url = URL_TLDS
+    try:
+        r = requests.get(base_url, allow_redirects=True, timeout=10)
+        if (r.status_code >= 400 and r.status_code <600):
+            return False
+
+        for line in r.iter_lines():
+            lo = fqdn.lower()
+            if lo.endswith("." + line.decode('utf8').lower()):
+                return True
+
+    except:
+        pass
+
+    return False
+
+
 class DomainHunterAPI:
     CHUNK_SIZE_BYTES = 4096
 
@@ -132,6 +159,12 @@ class DomainHunterAPI:
             res.body = 'Error: no domain provided'
             res.status = falcon.HTTP_400
             return
+
+        if not check_fqdn_is_legit(j.get("domain")):
+            res.body = 'Error: not a ccTLD, gTLD or other legit TLD found'
+            res.status = falcon.HTTP_404
+            return
+
 
         daemonize(domainhunter_start, j)
         res.status = falcon.HTTP_200
