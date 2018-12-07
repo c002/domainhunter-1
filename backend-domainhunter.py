@@ -251,7 +251,7 @@ class CAAHunterAPI:
         if dns_rr_caa is None:
             res.status = falcon.HTTP_404
         else:
-            res.body = str(dns_rr_caa)
+            res.body = json.dumps(dns_rr_caa)
             res.status = falcon.HTTP_200
 
 ### Main
