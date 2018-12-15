@@ -192,9 +192,15 @@ class DomainHunterAPI:
 
         # Decode UTF-8 bytes to Unicode, and convert single quotes
         # to double quotes to make it valid JSON
-        my_json = big_chunk.decode('utf8').replace("'", '"')
-        j = json.loads(my_json)
+        try:
+            my_json = big_chunk.decode('utf8').replace("'", '"')
+            j = json.loads(my_json)
+        except:
+            res.status = falcon.HTTP_400
+            res.body = 'Error: json not parseable.\nreceived (raw):\n' + big_chunk
+            return
 
+        print(j)
         if j.get("uuid_hunt") is None:
             res.body = 'Error: no uuid_hunt provided'
             res.status = falcon.HTTP_400
@@ -209,6 +215,9 @@ class DomainHunterAPI:
             res.body = 'Error: not a ccTLD, gTLD or other legit TLD found'
             res.status = falcon.HTTP_404
             return
+
+        daemonize(domainhunter_start, j)
+        res.status = falcon.HTTP_200
 
 
 class CAAHunterAPI:
@@ -234,8 +243,13 @@ class CAAHunterAPI:
 
         # Decode UTF-8 bytes to Unicode, and convert single quotes
         # to double quotes to make it valid JSON
-        my_json = big_chunk.decode('utf8').replace("'", '"')
-        j = json.loads(my_json)
+        try:
+            my_json = big_chunk.decode('utf8').replace("'", '"')
+            j = json.loads(my_json)
+        except:
+            res.status = falcon.HTTP_400
+            res.body = 'Error: json not parseable.\nreceived:\n' + big_chunk
+            return
 
         if j.get("domain") is None:
             res.body = 'Error: no domain provided'
