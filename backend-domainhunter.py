@@ -278,8 +278,8 @@ if __name__ == "__main__":
     # Parser
     parser = argparse.ArgumentParser(os.path.basename(__file__))
     parser.add_argument("--port",
-                        help="Listening port number (default is 5000).",
-                        type=int)
+                        help="Listening port number (default is 5000, can also listen to a range, like 5000-5010).",
+                        type=str)
     parser.add_argument("--host",
                         default=None,
                         help="Listening on IP-address (default is 127.0.0.1).",
@@ -299,12 +299,58 @@ if __name__ == "__main__":
     else:
         host = '127.0.0.1'
 
+    port      = 0
+    from_port = 0
+    to_port   = 0
+    bind_complete = False
+
     if args.port:
-        port = args.port
+        try:
+            port = int(args.port)
+        except:
+            try:
+                from_port = int(args.port.split('-')[0])
+                to_port   = int(args.port.split('-')[1])
+            except:
+                print("Error: parse error in port assignment:", args.port, "Format example is: 5000 or 5000-5010")
+                sys.exit(1)
+
+            if not from_port <= to_port:
+                print("Error: port range must start with a smaller port number and range to an upper port number")
+                sys.exit(1)
     else:
         port = 5000
 
-    httpd = simple_server.make_server(host, port, api)
+    # Bind to a port or free port
+    if port != 0:
+        try:
+            httpd = simple_server.make_server(host, port, api)
+            bind_complete = True
+        except:
+            print("Can't bind interface to", host, port, "possibly already in use")
+            sys.exit(1)
+    else:
+        for port in range(from_port, to_port + 1):
+            try:
+                httpd = simple_server.make_server(host, port, api)
+                bind_complete = True
+                break
+            except:
+                pass
+                continue
+
+    if not bind_complete:
+        if from_port != 0:
+            print("Could not bind to port range", from_port, "to", to_port, "on interface", host)
+        else:
+            print("Could not bind to port", port, "on interface", host)
+        sys.exit(1)
+
     print("Operating on", host, "port", port, "from current working dir", PATH)
     print("Locked and loaded for the hunt!")
-    httpd.serve_forever()
+    httpd.daemon_threads = True
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        print("Service stopped by user.")
+        pass
